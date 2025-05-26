@@ -1,11 +1,29 @@
 "use client"
 
 import type React from "react"
-import type { Patient } from "../../types"
-import Modal from "../common/Modal"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { Calendar, MapPin, Phone, Mail, CreditCard, User2, UserCog } from "lucide-react"
+import Modal from "../common/Modal"
+
+interface Patient {
+  id: number
+  code_patient?: string
+  nom: string
+  prenom: string
+  cin?: string
+  date_naissance: string
+  telephone: string
+  email?: string
+  adresse?: string
+  ville?: string
+  mutuelle?: string
+  prescripteur_nom?: string
+  prescripteur_id?: number
+  technicien_id?: number
+  date_creation: string
+  date_modification?: string
+}
 
 interface PatientDetailsProps {
   patient: Patient | null
@@ -24,7 +42,7 @@ const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onClose }) => 
   }
 
   return (
-    <Modal isOpen={true} onClose={onClose} title={`Détails du patient`} size="lg">
+    <Modal isOpen={true} onClose={onClose} title="Détails du patient" size="lg">
       <div className="space-y-6">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between pb-4 border-b">
           <div>
@@ -120,7 +138,8 @@ const PatientDetails: React.FC<PatientDetailsProps> = ({ patient, onClose }) => 
                 <div>
                   <p className="text-sm text-muted-foreground">Prescripteur</p>
                   <p className="font-medium">
-                    {patient.prescripteur_id ? `ID: ${patient.prescripteur_id}` : "Non assigné"}
+                    {patient.prescripteur_nom ||
+                      (patient.prescripteur_id ? `ID: ${patient.prescripteur_id}` : "Non assigné")}
                   </p>
                 </div>
                 <div>

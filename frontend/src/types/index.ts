@@ -17,7 +17,7 @@ export interface User {
   
   export interface Patient {
     id: number;
-    code_patient: string;
+    code_patient?: string;
     nom: string;
     prenom: string;
     cin?: string;
@@ -27,9 +27,11 @@ export interface User {
     adresse?: string;
     ville?: string;
     mutuelle?: string;
+    prescripteur_nom?: string;
     prescripteur_id?: number;
     technicien_id?: number;
     date_creation: string;
+    date_modification?: string;
   }
   
   export interface LoginResponse {

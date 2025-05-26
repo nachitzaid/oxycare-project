@@ -1,16 +1,48 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
-import axios from "@/lib/axios"
-import type { Patient, Prescripteur, User, ApiResponse } from "../../types"
-import Modal from "../common/Modal"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Loader2 } from "lucide-react"
+import Modal from "../common/Modal"
+
+interface Patient {
+  id: number
+  code_patient?: string
+  nom: string
+  prenom: string
+  cin?: string
+  date_naissance: string
+  telephone: string
+  email?: string
+  adresse?: string
+  ville?: string
+  mutuelle?: string
+  prescripteur_nom?: string
+  prescripteur_id?: number
+  technicien_id?: number
+  date_creation: string
+  date_modification?: string
+}
+
+interface Prescripteur {
+  id: number
+  nom: string
+  prenom: string
+  specialite: string
+  telephone?: string
+  email?: string
+}
+
+interface Technicien {
+  id: number
+  nom: string
+  prenom: string
+  email?: string
+}
 
 interface PatientFormProps {
   mode: "create" | "edit" | "view"
@@ -30,13 +62,14 @@ const PatientForm: React.FC<PatientFormProps> = ({ mode, patient, onSubmit, onCl
     adresse: "",
     ville: "",
     mutuelle: "",
+    prescripteur_nom: "",
     prescripteur_id: undefined,
     technicien_id: undefined,
   }
 
   const [formData, setFormData] = useState<Partial<Patient>>(patient || defaultFormData)
   const [prescripteurs, setPrescripteurs] = useState<Prescripteur[]>([])
-  const [techniciens, setTechniciens] = useState<User[]>([])
+  const [techniciens, setTechniciens] = useState<Technicien[]>([])
   const [loading, setLoading] = useState<boolean>(false)
   const [submitting, setSubmitting] = useState<boolean>(false)
 
@@ -45,26 +78,45 @@ const PatientForm: React.FC<PatientFormProps> = ({ mode, patient, onSubmit, onCl
   useEffect(() => {
     setFormData(patient || defaultFormData)
     if (mode !== "view") {
-      fetchPrescripteursAndTechniciens()
+      fetchReferenceData()
     }
   }, [patient, mode])
 
-  const fetchPrescripteursAndTechniciens = async () => {
+  const fetchReferenceData = async () => {
     setLoading(true)
     try {
       const token = localStorage.getItem("token")
-      const headers = { Authorization: `Bearer ${token}` }
-
-      // Fetch prescripteurs
-      const prescripteursResponse = await axios.get<ApiResponse<Prescripteur[]>>("/prescripteurs", { headers })
-      if (prescripteursResponse.data.success && prescripteursResponse.data.data) {
-        setPrescripteurs(prescripteursResponse.data.data)
+      const headers = {
+        "Content-Type": "application/json",
+        ...(token && { Authorization: `Bearer ${token}` }),
       }
 
-      // Fetch techniciens (users with role='technicien')
-      const techniciensResponse = await axios.get<ApiResponse<User[]>>("/utilisateurs?role=technicien", { headers })
-      if (techniciensResponse.data.success && techniciensResponse.data.data) {
-        setTechniciens(techniciensResponse.data.data)
+      // Fetch techniciens
+      try {
+        const response = await fetch("http://localhost:5000/api/utilisateurs?role=technicien", { headers })
+        if (response.ok) {
+          const data = await response.json()
+          if (data.success && data.data) {
+            setTechniciens(Array.isArray(data.data) ? data.data : [])
+          }
+        }
+      } catch (error) {
+        console.error("Erreur lors du chargement des techniciens:", error)
+        setTechniciens([])
+      }
+
+      // Fetch prescripteurs (si nécessaire)
+      try {
+        const response = await fetch("http://localhost:5000/api/prescripteurs", { headers })
+        if (response.ok) {
+          const data = await response.json()
+          if (data.success && data.data) {
+            setPrescripteurs(Array.isArray(data.data) ? data.data : [])
+          }
+        }
+      } catch (error) {
+        console.error("Erreur lors du chargement des prescripteurs:", error)
+        setPrescripteurs([])
       }
     } catch (error) {
       console.error("Erreur lors du chargement des données de référence:", error)
@@ -87,7 +139,7 @@ const PatientForm: React.FC<PatientFormProps> = ({ mode, patient, onSubmit, onCl
   }
 
   const handleSelectChange = (name: string, value: string) => {
-    if (value === "") {
+    if (value === "" || value === "-1") {
       setFormData((prev) => ({ ...prev, [name]: null }))
     } else {
       setFormData((prev) => ({ ...prev, [name]: Number.parseInt(value, 10) }))
@@ -117,7 +169,7 @@ const PatientForm: React.FC<PatientFormProps> = ({ mode, patient, onSubmit, onCl
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Informations personnelles */}
           <div className="space-y-2">
-            <Label htmlFor="nom">Nom</Label>
+            <Label htmlFor="nom">Nom *</Label>
             <Input
               id="nom"
               name="nom"
@@ -129,7 +181,7 @@ const PatientForm: React.FC<PatientFormProps> = ({ mode, patient, onSubmit, onCl
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="prenom">Prénom</Label>
+            <Label htmlFor="prenom">Prénom *</Label>
             <Input
               id="prenom"
               name="prenom"
@@ -152,7 +204,7 @@ const PatientForm: React.FC<PatientFormProps> = ({ mode, patient, onSubmit, onCl
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="date_naissance">Date de naissance</Label>
+            <Label htmlFor="date_naissance">Date de naissance *</Label>
             <Input
               id="date_naissance"
               name="date_naissance"
@@ -165,7 +217,7 @@ const PatientForm: React.FC<PatientFormProps> = ({ mode, patient, onSubmit, onCl
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="telephone">Téléphone</Label>
+            <Label htmlFor="telephone">Téléphone *</Label>
             <Input
               id="telephone"
               name="telephone"
@@ -223,24 +275,15 @@ const PatientForm: React.FC<PatientFormProps> = ({ mode, patient, onSubmit, onCl
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="prescripteur_id">Prescripteur</Label>
-            <Select
-              disabled={isReadOnly || loading || submitting}
-              value={formData.prescripteur_id?.toString() || ""}
-              onValueChange={(value) => handleSelectChange("prescripteur_id", value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Sélectionner un prescripteur" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="-1">Aucun prescripteur</SelectItem>
-                {prescripteurs.map((prescripteur) => (
-                  <SelectItem key={prescripteur.id} value={prescripteur.id.toString()}>
-                    {prescripteur.prenom} {prescripteur.nom} ({prescripteur.specialite})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label htmlFor="prescripteur_nom">Prescripteur</Label>
+            <Input
+              id="prescripteur_nom"
+              name="prescripteur_nom"
+              value={formData.prescripteur_nom || ""}
+              onChange={handleChange}
+              disabled={isReadOnly || submitting}
+              placeholder="Nom du prescripteur"
+            />
           </div>
 
           <div className="space-y-2">

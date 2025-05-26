@@ -21,11 +21,14 @@ class Patient(ModeleBase):
     prescripteur_id = db.Column(db.Integer, db.ForeignKey('prescripteurs.id'), nullable=True)
     technicien_id = db.Column(db.Integer, db.ForeignKey('utilisateurs.id'), nullable=True)
     
-    # Relations
+    # Relations avec lazy loading pour éviter les problèmes
     dispositifs = db.relationship('DispositifMedical', backref='patient', lazy='dynamic')
     traitements = db.relationship('Traitement', backref='patient', lazy='dynamic')
     fiches_controle = db.relationship('FicheControle', backref='patient', lazy='dynamic')
     interventions = db.relationship('Intervention', backref='patient', lazy='dynamic')
+    
+    # Relation avec le prescripteur - IMPORTANT: lazy='select' pour charger automatiquement
+    prescripteur = db.relationship('Prescripteur', backref='patients_rel', lazy='select')
     
     def generer_code_patient(self):
         """Génère un code patient unique basé sur les initiales et un timestamp"""
@@ -35,16 +38,19 @@ class Patient(ModeleBase):
             self.code_patient = f"P{initiales}{timestamp}"
         return self.code_patient
     
-    def to_dict(self):
-        # Gestion sécurisée de la relation prescripteur
-        prescripteur_nom = None
+    @property
+    def prescripteur_nom(self):
+        """Propriété pour obtenir le nom complet du prescripteur"""
         try:
-            if self.prescripteur_id and hasattr(self, 'prescripteur') and self.prescripteur:
-                prescripteur_nom = f"{self.prescripteur.nom} {self.prescripteur.prenom}"
+            if self.prescripteur:
+                return f"{self.prescripteur.prenom} {self.prescripteur.nom}".strip()
+            return None
         except Exception:
             # En cas d'erreur lors du chargement de la relation
-            prescripteur_nom = None
-        
+            return None
+    
+    def to_dict(self):
+        """Convertit l'objet Patient en dictionnaire"""
         return {
             'id': self.id,
             'code_patient': self.code_patient,
@@ -58,7 +64,8 @@ class Patient(ModeleBase):
             'ville': self.ville,
             'mutuelle': self.mutuelle,
             'prescripteur_id': self.prescripteur_id,
-            'prescripteur_nom': prescripteur_nom,
+            'prescripteur_nom': self.prescripteur_nom,  # Utilise la propriété
             'technicien_id': self.technicien_id,
-            'date_creation': self.date_creation.isoformat() if self.date_creation else None
+            'date_creation': self.date_creation.isoformat() if self.date_creation else None,
+            'date_modification': self.date_modification.isoformat() if self.date_modification else None
         }
