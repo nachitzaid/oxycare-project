@@ -17,4 +17,4 @@ class SchemaPatient(Schema):
     prescripteur_nom = fields.Str(validate=validate.Length(max=100))
     technicien_id = fields.Int(allow_none=True)
     date_creation = fields.DateTime(dump_only=True)
-    date_modification = fields.DateTime(dump_only=True)
+    date_modification = fields.DateTime(dump_only=True)    

@@ -93,7 +93,7 @@ const PatientForm: React.FC<PatientFormProps> = ({ mode, patient, onSubmit, onCl
 
       // Fetch techniciens
       try {
-        const response = await fetch("http://localhost:5000/api/utilisateurs?role=technicien", { headers })
+        const response = await fetch("http://localhost:5000/api/utilisateurs/techniciens")
         if (response.ok) {
           const data = await response.json()
           if (data.success && data.data) {
@@ -271,18 +271,6 @@ const PatientForm: React.FC<PatientFormProps> = ({ mode, patient, onSubmit, onCl
               value={formData.mutuelle || ""}
               onChange={handleChange}
               disabled={isReadOnly || submitting}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="prescripteur_nom">Prescripteur</Label>
-            <Input
-              id="prescripteur_nom"
-              name="prescripteur_nom"
-              value={formData.prescripteur_nom || ""}
-              onChange={handleChange}
-              disabled={isReadOnly || submitting}
-              placeholder="Nom du prescripteur"
             />
           </div>
 
