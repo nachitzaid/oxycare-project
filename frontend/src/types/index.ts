@@ -50,22 +50,6 @@ export interface User {
     date_creation: string;
   }
   
-  export interface DispositifMedical {
-    id: number;
-    patient_id: number;
-    designation: string;
-    reference: string;
-    numero_serie: string;
-    type_acquisition: 'location' | 'achat_garantie' | 'achat_externe' | 'achat_oxylife';
-    date_acquisition: string;
-    date_fin_garantie: string | null;
-    duree_location: number | null;
-    date_fin_location: string | null;
-    statut: 'actif' | 'en_maintenance' | 'retiré';
-    est_sous_garantie: boolean;
-    est_location_active: boolean;
-  }
-  
   export interface Accessoire {
     id: number;
     dispositif_id: number;
@@ -98,4 +82,55 @@ export interface User {
     success: boolean;
     message: string;
     data?: T;
+  }
+  export interface DispositifMedical {
+    id: number;
+    patient_id: number | null;
+    designation: string;
+    reference: string;
+    numero_serie: string;
+    type_acquisition: 'location' | 'achat_garantie' | 'achat_externe' | 'achat_oxylife';
+    date_acquisition: string | null;
+    date_fin_garantie: string | null;
+    duree_location: number | null;
+    date_fin_location: string | null;
+    statut: 'actif' | 'en_maintenance' | 'retiré';
+    est_sous_garantie: boolean;
+    est_location_active: boolean;
+    patient?: {
+      id: number;
+      code_patient: string;
+      nom: string;
+      prenom: string;
+      telephone?: string;
+      email?: string;
+    };
+  }
+  
+  export interface StatistiquesDispositifs {
+    total_dispositifs: number;
+    repartition_statuts: Record<string, number>;
+    repartition_types_acquisition: Record<string, number>;
+    dispositifs_sous_garantie: number;
+    top_designations: Array<{
+      designation: string;
+      count: number;
+    }>;
+    moyenne_dispositifs_par_patient: number;
+    nb_patients_avec_dispositifs: number;
+  }
+  
+  export interface PaginatedResponse<T> {
+    items: T[];
+    page_courante: number;
+    pages_totales: number;
+    total_elements: number;
+    elements_par_page: number;
+  }
+  
+  export interface ApiResponse<T = any> {
+    success: boolean;
+    data?: T;
+    message: string;
+    error?: string;
   }

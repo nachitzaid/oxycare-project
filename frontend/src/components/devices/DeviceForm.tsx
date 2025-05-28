@@ -1,167 +1,157 @@
-"use client"
+import React, { useState, useEffect } from 'react';
+import { X } from 'lucide-react';
 
-import type React from "react"
-import { useState, useEffect } from "react"
-import axios from "axios"
-import type { DispositifMedical, Patient, ApiResponse } from "../../types"
-import Modal from "../common/Modal"
+interface Patient {
+  id: number;
+  code_patient: string;
+  nom: string;
+  prenom: string;
+}
+
+interface DispositifMedical {
+  id?: number;
+  patient_id: number | null;
+  designation: string;
+  reference: string;
+  numero_serie: string;
+  type_acquisition: string;
+  date_acquisition: string;
+  date_fin_garantie: string;
+  duree_location: number | null;
+  date_fin_location: string;
+  statut: string;
+}
 
 interface DeviceFormProps {
-  mode: "create" | "edit"
-  device: DispositifMedical | null
-  onSubmit: (deviceData: Partial<DispositifMedical>) => Promise<void>
-  onClose: () => void
+  mode: 'create' | 'edit';
+  device?: DispositifMedical | null;
+  onSubmit: (deviceData: Partial<DispositifMedical>) => Promise<void>;
+  onClose: () => void;
 }
 
 const DeviceForm: React.FC<DeviceFormProps> = ({ mode, device, onSubmit, onClose }) => {
-  const defaultFormData: Partial<DispositifMedical> = {
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState<Partial<DispositifMedical>>({
     patient_id: null,
-    designation: "",
-    reference: "",
-    numero_serie: "",
-    type_acquisition: "location",
-    date_acquisition: new Date().toISOString().split("T")[0],
-    date_fin_garantie: null,
+    designation: '',
+    reference: '',
+    numero_serie: '',
+    type_acquisition: 'achat_garantie',
+    date_acquisition: '',
+    date_fin_garantie: '',
     duree_location: null,
-    date_fin_location: null,
-    statut: "actif",
-    est_sous_garantie: false,
-    est_location_active: false,
-  }
-
-  const [formData, setFormData] = useState<Partial<DispositifMedical>>(device || defaultFormData)
-  const [patients, setPatients] = useState<Patient[]>([])
-  const [loading, setLoading] = useState<boolean>(false)
-  const [showLocationFields, setShowLocationFields] = useState<boolean>(
-    device ? device.type_acquisition === "location" : true,
-  )
-  const [showGarantieFields, setShowGarantieFields] = useState<boolean>(
-    device ? device.type_acquisition !== "location" : false,
-  )
+    date_fin_location: '',
+    statut: 'actif'
+  });
 
   useEffect(() => {
-    setFormData(device || defaultFormData)
-    setShowLocationFields(device ? device.type_acquisition === "location" : true)
-    setShowGarantieFields(device ? device.type_acquisition !== "location" : false)
-    fetchPatients()
-  }, [device, mode])
+    fetchPatients();
+    if (device && mode === 'edit') {
+      setFormData({
+        patient_id: device.patient_id,
+        designation: device.designation,
+        reference: device.reference,
+        numero_serie: device.numero_serie,
+        type_acquisition: device.type_acquisition,
+        date_acquisition: device.date_acquisition || '',
+        date_fin_garantie: device.date_fin_garantie || '',
+        duree_location: device.duree_location,
+        date_fin_location: device.date_fin_location || '',
+        statut: device.statut
+      });
+    }
+  }, [device, mode]);
 
   const fetchPatients = async () => {
-    setLoading(true)
     try {
-      const token = localStorage.getItem("token")
-      const response = await axios.get<ApiResponse<Patient[]>>("/api/patients/all", {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-
-      if (response.data.success && response.data.data) {
-        setPatients(response.data.data)
+      const response = await fetch('/api/debug/patients');
+      const data = await response.json();
+      if (data.success) {
+        setPatients(data.patients || []);
       }
     } catch (error) {
-      console.error("Erreur lors du chargement des patients:", error)
-    } finally {
-      setLoading(false)
+      console.error('Erreur lors du chargement des patients:', error);
     }
-  }
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value, type } = e.target
-
-    if (name === "type_acquisition") {
-      const isLocation = value === "location"
-      setShowLocationFields(isLocation)
-      setShowGarantieFields(!isLocation)
-
-      // Reset related fields when changing acquisition type
-      if (isLocation) {
-        setFormData((prev) => ({
-          ...prev,
-          [name]: value,
-          date_fin_garantie: null,
-          duree_location: prev.duree_location || 1,
-          est_sous_garantie: false,
-        }))
-      } else {
-        setFormData((prev) => ({
-          ...prev,
-          [name]: value,
-          duree_location: null,
-          date_fin_location: null,
-          est_location_active: false,
-        }))
-      }
-    } else if (name === "patient_id") {
-      setFormData((prev) => ({
-        ...prev,
-        [name]: value ? Number.parseInt(value, 10) : null,
-      }))
-    } else if (name === "duree_location") {
-      const durationValue = value ? Number.parseInt(value, 10) : null
-
-      // Calculate end date based on duration
-      let endDate = null
-      if (durationValue && formData.date_acquisition) {
-        const startDate = new Date(formData.date_acquisition)
-        endDate = new Date(startDate)
-        endDate.setMonth(endDate.getMonth() + durationValue)
-        endDate = endDate.toISOString().split("T")[0]
-      }
-
-      setFormData((prev) => ({
-        ...prev,
-        [name]: durationValue,
-        date_fin_location: endDate,
-      }))
-    } else if (type === "checkbox") {
-      setFormData((prev) => ({
-        ...prev,
-        [name]: (e.target as HTMLInputElement).checked,
-      }))
-    } else if (name === "date_acquisition" && showLocationFields && formData.duree_location) {
-      // Recalculate end date when start date changes
-      const startDate = new Date(value)
-      const endDate = new Date(startDate)
-      endDate.setMonth(endDate.getMonth() + formData.duree_location)
-
-      setFormData((prev) => ({
-        ...prev,
-        [name]: value,
-        date_fin_location: endDate.toISOString().split("T")[0],
-      }))
-    } else {
-      setFormData((prev) => ({
-        ...prev,
-        [name]: value,
-      }))
-    }
-  }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    await onSubmit(formData)
-  }
+    e.preventDefault();
+    setLoading(true);
+    
+    try {
+      const submitData = {
+        ...formData,
+        patient_id: formData.patient_id ? Number(formData.patient_id) : null,
+        duree_location: formData.duree_location ? Number(formData.duree_location) : null
+      };
+
+      Object.keys(submitData).forEach(key => {
+        if (submitData[key] === '' || submitData[key] === null) {
+          if (key !== 'patient_id' && key !== 'duree_location') {
+            delete submitData[key];
+          }
+        }
+      });
+
+      await onSubmit(submitData);
+    } catch (error) {
+      console.error('Erreur lors de la soumission:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const typeAcquisitionOptions = [
+    { value: 'location', label: 'Location' },
+    { value: 'achat_garantie', label: 'Achat avec garantie' },
+    { value: 'achat_externe', label: 'Achat externe' },
+    { value: 'achat_oxylife', label: 'Achat Oxylife' }
+  ];
+
+  const statutOptions = [
+    { value: 'actif', label: 'Actif' },
+    { value: 'en_maintenance', label: 'En maintenance' },
+    { value: 'retiré', label: 'Retiré' }
+  ];
 
   return (
-    <Modal
-      isOpen={true}
-      onClose={onClose}
-      title={mode === "create" ? "Ajouter un dispositif médical" : "Modifier un dispositif médical"}
-    >
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Informations de base */}
-          <div className="space-y-2 md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700">Patient</label>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-xl font-bold">
+            {mode === 'create' ? 'Nouveau Dispositif Médical' : 'Modifier le Dispositif'}
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-gray-500 hover:text-gray-700"
+          >
+            <X size={24} />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          {/* Patient */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Patient (optionnel)
+            </label>
             <select
               name="patient_id"
-              value={formData.patient_id || ""}
+              value={formData.patient_id || ''}
               onChange={handleChange}
-              disabled={loading}
-              required
-              className="w-full p-2 border border-gray-300 rounded"
+              className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
             >
-              <option value="">Sélectionner un patient</option>
-              {patients.map((patient) => (
+              <option value="">Aucun patient assigné</option>
+              {patients.map(patient => (
                 <option key={patient.id} value={patient.id}>
                   {patient.code_patient} - {patient.prenom} {patient.nom}
                 </option>
@@ -169,170 +159,172 @@ const DeviceForm: React.FC<DeviceFormProps> = ({ mode, device, onSubmit, onClose
             </select>
           </div>
 
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">Désignation</label>
+          {/* Désignation */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Désignation *
+            </label>
             <input
               type="text"
               name="designation"
-              value={formData.designation || ""}
+              value={formData.designation || ''}
               onChange={handleChange}
               required
-              className="w-full p-2 border border-gray-300 rounded"
+              className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+              placeholder="Ex: Concentrateur d'oxygène"
             />
           </div>
 
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">Référence</label>
-            <input
-              type="text"
-              name="reference"
-              value={formData.reference || ""}
-              onChange={handleChange}
-              required
-              className="w-full p-2 border border-gray-300 rounded"
-            />
+          {/* Référence et Numéro de série */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Référence
+              </label>
+              <input
+                type="text"
+                name="reference"
+                value={formData.reference || ''}
+                onChange={handleChange}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                placeholder="Ex: CONC-001"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Numéro de série
+              </label>
+              <input
+                type="text"
+                name="numero_serie"
+                value={formData.numero_serie || ''}
+                onChange={handleChange}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                placeholder="Ex: SN123456"
+              />
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">Numéro de série</label>
-            <input
-              type="text"
-              name="numero_serie"
-              value={formData.numero_serie || ""}
-              onChange={handleChange}
-              required
-              className="w-full p-2 border border-gray-300 rounded"
-            />
+          {/* Type d'acquisition et Statut */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Type d'acquisition *
+              </label>
+              <select
+                name="type_acquisition"
+                value={formData.type_acquisition || ''}
+                onChange={handleChange}
+                required
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+              >
+                {typeAcquisitionOptions.map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Statut
+              </label>
+              <select
+                name="statut"
+                value={formData.statut || ''}
+                onChange={handleChange}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+              >
+                {statutOptions.map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">Type d'acquisition</label>
-            <select
-              name="type_acquisition"
-              value={formData.type_acquisition || "location"}
-              onChange={handleChange}
-              required
-              className="w-full p-2 border border-gray-300 rounded"
-            >
-              <option value="location">Location</option>
-              <option value="achat_garantie">Achat avec garantie</option>
-              <option value="achat_externe">Achat externe</option>
-              <option value="achat_oxylife">Achat OxyLife</option>
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">Date d'acquisition</label>
-            <input
-              type="date"
-              name="date_acquisition"
-              value={formData.date_acquisition ? formData.date_acquisition.split("T")[0] : ""}
-              onChange={handleChange}
-              required
-              className="w-full p-2 border border-gray-300 rounded"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">Statut</label>
-            <select
-              name="statut"
-              value={formData.statut || "actif"}
-              onChange={handleChange}
-              required
-              className="w-full p-2 border border-gray-300 rounded"
-            >
-              <option value="actif">Actif</option>
-              <option value="en_maintenance">En maintenance</option>
-              <option value="retiré">Retiré</option>
-            </select>
+          {/* Dates */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Date d'acquisition
+              </label>
+              <input
+                type="date"
+                name="date_acquisition"
+                value={formData.date_acquisition || ''}
+                onChange={handleChange}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Date fin de garantie
+              </label>
+              <input
+                type="date"
+                name="date_fin_garantie"
+                value={formData.date_fin_garantie || ''}
+                onChange={handleChange}
+                className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
           </div>
 
           {/* Champs spécifiques à la location */}
-          {showLocationFields && (
-            <>
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">Durée de location (mois)</label>
+          {formData.type_acquisition === 'location' && (
+            <div className="grid grid-cols-2 gap-4 p-4 bg-blue-50 rounded-lg">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Durée de location (mois)
+                </label>
                 <input
                   type="number"
                   name="duree_location"
-                  value={formData.duree_location || ""}
+                  value={formData.duree_location || ''}
                   onChange={handleChange}
                   min="1"
-                  required
-                  className="w-full p-2 border border-gray-300 rounded"
+                  className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">Date de fin de location</label>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Date fin de location
+                </label>
                 <input
                   type="date"
                   name="date_fin_location"
-                  value={formData.date_fin_location ? formData.date_fin_location.split("T")[0] : ""}
-                  readOnly
-                  className="w-full p-2 border border-gray-300 rounded bg-gray-50"
-                />
-                <p className="text-xs text-gray-500">Calculée automatiquement</p>
-              </div>
-
-              <div className="space-y-2 md:col-span-2">
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    name="est_location_active"
-                    checked={formData.est_location_active || false}
-                    onChange={handleChange}
-                    className="h-4 w-4 text-blue-600 border-gray-300 rounded"
-                  />
-                  <span className="ml-2 text-sm text-gray-700">Location active</span>
-                </label>
-              </div>
-            </>
-          )}
-
-          {/* Champs spécifiques à l'achat */}
-          {showGarantieFields && (
-            <>
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700">Date de fin de garantie</label>
-                <input
-                  type="date"
-                  name="date_fin_garantie"
-                  value={formData.date_fin_garantie ? formData.date_fin_garantie.split("T")[0] : ""}
+                  value={formData.date_fin_location || ''}
                   onChange={handleChange}
-                  className="w-full p-2 border border-gray-300 rounded"
+                  className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-
-              <div className="space-y-2 md:col-span-2">
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    name="est_sous_garantie"
-                    checked={formData.est_sous_garantie || false}
-                    onChange={handleChange}
-                    className="h-4 w-4 text-blue-600 border-gray-300 rounded"
-                  />
-                  <span className="ml-2 text-sm text-gray-700">Sous garantie</span>
-                </label>
-              </div>
-            </>
+            </div>
           )}
+
+          {/* Boutons */}
+          <div className="flex justify-end space-x-4 pt-6">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50"
+            >
+              Annuler
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={loading}
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+            >
+              {loading ? 'En cours...' : (mode === 'create' ? 'Créer' : 'Modifier')}
+            </button>
+          </div>
         </div>
+      </div>
+    </div>
+  );
+};
 
-        <div className="flex justify-end space-x-2 pt-4">
-          <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-300 hover:bg-gray-400 rounded">
-            Annuler
-          </button>
-
-          <button type="submit" className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded">
-            {mode === "create" ? "Créer" : "Mettre à jour"}
-          </button>
-        </div>
-      </form>
-    </Modal>
-  )
-}
-
-export default DeviceForm
+export default DeviceForm;
