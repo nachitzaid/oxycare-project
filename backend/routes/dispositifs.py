@@ -90,8 +90,8 @@ def creer_dispositif():
     try:
         data = request.get_json()
         
-        # Validation des champs requis
-        champs_requis = ['patient_id', 'designation', 'type_acquisition']
+        # Validation des champs requis (exclure patient_id)
+        champs_requis = ['designation', 'type_acquisition']
         for champ in champs_requis:
             if not data.get(champ):
                 return jsonify({
@@ -99,13 +99,15 @@ def creer_dispositif():
                     'message': f'Le champ {champ} est requis'
                 }), 400
         
-        # Vérifier que le patient existe
-        patient = Patient.query.get(data['patient_id'])
-        if not patient:
-            return jsonify({
-                'success': False,
-                'message': 'Patient non trouvé'
-            }), 404
+        # Vérifier que le patient existe si patient_id est fourni
+        patient_id = data.get('patient_id')
+        if patient_id is not None:
+            patient = Patient.query.get(patient_id)
+            if not patient:
+                return jsonify({
+                    'success': False,
+                    'message': 'Patient non trouvé'
+                }), 404
         
         # Vérifier l'unicité du numéro de série si fourni
         if data.get('numero_serie'):
@@ -151,7 +153,7 @@ def creer_dispositif():
         
         # Créer le nouveau dispositif
         nouveau_dispositif = DispositifMedical(
-            patient_id=data['patient_id'],
+            patient_id=patient_id,  # Peut être None
             designation=data['designation'],
             reference=data.get('reference', ''),
             numero_serie=data.get('numero_serie', ''),
@@ -168,12 +170,15 @@ def creer_dispositif():
         
         # Récupérer le dispositif créé avec les relations
         dispositif_data = nouveau_dispositif.to_dict()
-        dispositif_data['patient'] = {
-            'id': patient.id,
-            'code_patient': patient.code_patient,
-            'nom': patient.nom,
-            'prenom': patient.prenom
-        }
+        if patient_id:
+            patient = Patient.query.get(patient_id)
+            if patient:
+                dispositif_data['patient'] = {
+                    'id': patient.id,
+                    'code_patient': patient.code_patient,
+                    'nom': patient.nom,
+                    'prenom': patient.prenom
+                }
         
         return jsonify({
             'success': True,
@@ -189,7 +194,7 @@ def creer_dispositif():
             'error': str(e),
             'message': 'Erreur lors de la création du dispositif'
         }), 500
-
+        
 @dispositifs_bp.route('/<int:dispositif_id>', methods=['GET'])
 def obtenir_dispositif(dispositif_id):
     """Récupérer un dispositif spécifique"""

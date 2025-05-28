@@ -73,13 +73,19 @@ const DeviceManagement = () => {
       ...options,
     };
 
-    const response = await fetch(`${API_BASE_URL}${url}`, config);
+    try {
+      const response = await fetch(`${API_BASE_URL}${url}`, config);
+      const data = await response.json();
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      if (!response.ok) {
+        throw new Error(data.message || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      return data;
+    } catch (error) {
+      console.error(`Erreur requête ${url}:`, error);
+      throw error;
     }
-
-    return response.json();
   };
 
   // Show success/error messages
@@ -123,7 +129,7 @@ const DeviceManagement = () => {
         throw new Error(data.message || "Erreur lors du chargement des dispositifs");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erreur lors du chargement des dispositifs");
+      showMessage(err instanceof Error ? err.message : "Erreur lors du chargement des dispositifs", "error");
     } finally {
       setLoading(false);
     }
@@ -133,19 +139,23 @@ const DeviceManagement = () => {
   const fetchPatients = async () => {
     try {
       const data = await makeRequest("/debug/patients");
-      if (data.success && Array.isArray(data.data)) {
-        setPatients(data.data);
+      console.log("Réponse API patients:", data); // Log pour débogage
+      if (data.success && Array.isArray(data.patients)) {
+        setPatients(data.patients);
       } else {
         console.error("Erreur lors du chargement des patients:", data.message);
+        showMessage(data.message || "Erreur lors de la récupération des patients", "error");
       }
     } catch (error) {
       console.error("Erreur lors du chargement des patients:", error);
+      showMessage("Erreur lors de la récupération des patients", "error");
     }
   };
 
   // Create device
   const handleCreateDevice = async (deviceData: Partial<DispositifMedical>) => {
     try {
+      console.log("Données envoyées pour création:", deviceData); // Log pour débogage
       const response = await makeRequest("/dispositifs", {
         method: "POST",
         body: JSON.stringify(deviceData),
@@ -168,6 +178,7 @@ const DeviceManagement = () => {
     if (!editingDevice) return;
 
     try {
+      console.log("Données envoyées pour modification:", deviceData); // Log pour débogage
       const response = await makeRequest(`/dispositifs/${editingDevice.id}`, {
         method: "PUT",
         body: JSON.stringify(deviceData),

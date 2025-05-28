@@ -6,7 +6,7 @@ class DispositifMedical(ModeleBase):
     """Modèle pour la table des dispositifs médicaux"""
     __tablename__ = 'dispositifs_medicaux'
     
-    patient_id = db.Column(db.Integer, db.ForeignKey('patients.id'), nullable=False)
+    patient_id = db.Column(db.Integer, db.ForeignKey('patients.id'), nullable=True)
     designation = db.Column(db.String(100))
     reference = db.Column(db.String(50))
     numero_serie = db.Column(db.String(50), unique=True, index=True)

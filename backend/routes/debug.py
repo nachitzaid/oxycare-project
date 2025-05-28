@@ -511,3 +511,162 @@ def debug_get_patient(patient_id):
             'error': str(e),
             'message': 'Erreur lors de la récupération du patient'
         }), 500
+
+@debug_bp.route('/patients/statistiques', methods=['GET'])
+def statistiques_patients():
+    """Route pour obtenir les statistiques détaillées des patients"""
+    try:
+        # Total des patients
+        total_patients = Patient.query.count()
+        
+        # Patients créés ce mois
+        maintenant = datetime.now()
+        debut_mois = datetime(maintenant.year, maintenant.month, 1)
+        nouveaux_ce_mois = Patient.query.filter(
+            Patient.date_creation >= debut_mois
+        ).count()
+        
+        # Patients par mois (6 derniers mois)
+        patients_par_mois = db.session.query(
+            extract('year', Patient.date_creation).label('annee'),
+            extract('month', Patient.date_creation).label('mois'),
+            func.count(Patient.id).label('nombre')
+        ).filter(
+            Patient.date_creation >= datetime(maintenant.year, maintenant.month - 5, 1)
+        ).group_by(
+            extract('year', Patient.date_creation),
+            extract('month', Patient.date_creation)
+        ).order_by('annee', 'mois').all()
+        
+        # Formatage des données par mois
+        mois_data = []
+        for annee, mois, nombre in patients_par_mois:
+            mois_nom = datetime(int(annee), int(mois), 1).strftime('%b %Y')
+            mois_data.append({'mois': mois_nom, 'nombre': nombre})
+        
+        # Patients par ville
+        patients_par_ville = db.session.query(
+            Patient.ville,
+            func.count(Patient.id).label('nombre')
+        ).group_by(Patient.ville).order_by(
+            func.count(Patient.id).desc()
+        ).limit(10).all()
+        
+        villes_data = []
+        for ville, nombre in patients_par_ville:
+            ville_nom = ville or 'Non spécifiée'
+            villes_data.append({'ville': ville_nom, 'nombre': nombre})
+        
+        # Patients avec dispositifs
+        patients_avec_dispositifs = db.session.query(
+            func.count(func.distinct(DispositifMedical.patient_id))
+        ).filter(DispositifMedical.patient_id.isnot(None)).scalar()
+        
+        # Répartition par âge
+        patients_ages = db.session.query(
+            Patient.date_naissance
+        ).filter(Patient.date_naissance.isnot(None)).all()
+        
+        tranches_age = {'0-18': 0, '19-35': 0, '36-55': 0, '56-70': 0, '70+': 0}
+        for (date_naissance,) in patients_ages:
+            if date_naissance:
+                age = (date.today() - date_naissance).days // 365
+                if age <= 18:
+                    tranches_age['0-18'] += 1
+                elif age <= 35:
+                    tranches_age['19-35'] += 1
+                elif age <= 55:
+                    tranches_age['36-55'] += 1
+                elif age <= 70:
+                    tranches_age['56-70'] += 1
+                else:
+                    tranches_age['70+'] += 1
+        
+        # Patients par prescripteur
+        patients_par_prescripteur = db.session.query(
+            Patient.prescripteur_nom,
+            func.count(Patient.id).label('nombre')
+        ).filter(
+            Patient.prescripteur_nom.isnot(None),
+            Patient.prescripteur_nom != ''
+        ).group_by(Patient.prescripteur_nom).order_by(
+            func.count(Patient.id).desc()
+        ).limit(5).all()
+        
+        prescripteurs_data = []
+        for prescripteur, nombre in patients_par_prescripteur:
+            prescripteurs_data.append({'prescripteur': prescripteur, 'nombre': nombre})
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'total_patients': total_patients,
+                'nouveaux_ce_mois': nouveaux_ce_mois,
+                'patients_avec_dispositifs': patients_avec_dispositifs or 0,
+                'par_mois': mois_data,
+                'par_ville': villes_data,
+                'par_tranche_age': [
+                    {'tranche': k, 'nombre': v} 
+                    for k, v in tranches_age.items() if v > 0
+                ],
+                'par_prescripteur': prescripteurs_data,
+                'taux_equipement': round(
+                    (patients_avec_dispositifs / total_patients * 100) if total_patients > 0 else 0, 2
+                )
+            },
+            'message': 'Statistiques des patients récupérées avec succès'
+        }), 200
+        
+    except Exception as e:
+        print(f"Erreur statistiques_patients: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'message': 'Erreur lors de la récupération des statistiques'
+        }), 500
+
+
+# Route alternative pour les statistiques générales
+@debug_bp.route('/statistiques/general', methods=['GET'])
+def statistiques_general():
+    """Route pour obtenir toutes les statistiques en une fois"""
+    try:
+        # Récupérer les stats patients
+        from routes.debug import debug_bp
+        patients_response = statistiques_patients()  # Appeler la fonction directement
+        
+        # Récupérer les stats dispositifs
+        from routes.dispositifs import statistiques_dispositifs
+        dispositifs_response = statistiques_dispositifs()
+        
+        # Combiner les réponses
+        patients_data = patients_response[0].get_json()['data'] if patients_response[1] == 200 else {}
+        
+        try:
+            dispositifs_data = statistiques_dispositifs()[0].get_json()['data']
+        except:
+            dispositifs_data = {}
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'patients': patients_data,
+                'dispositifs': dispositifs_data,
+                'resume': {
+                    'total_patients': patients_data.get('total_patients', 0),
+                    'total_dispositifs': dispositifs_data.get('total_dispositifs', 0),
+                    'taux_equipement': patients_data.get('taux_equipement', 0),
+                    'nouveaux_ce_mois': patients_data.get('nouveaux_ce_mois', 0)
+                }
+            },
+            'message': 'Statistiques générales récupérées avec succès'
+        }), 200
+        
+    except Exception as e:
+        print(f"Erreur statistiques_general: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'message': 'Erreur lors de la récupération des statistiques générales'
+        }), 500
+        
