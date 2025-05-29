@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -12,11 +11,11 @@ import {
   Cpu,
   PenToolIcon as Tool,
   ClipboardCheck,
-  BarChart3,
   ChevronLeft,
   Menu,
   Settings,
   LogOut,
+  Bell,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -37,9 +36,9 @@ const Sidebar = () => {
   // Navigation selon les rôles
   const navigation: NavigationItem[] = [
     {
-      name: "Tableau de bord",
-      href: "/dashboard",
-      icon: <Home className="h-5 w-5" />,
+      name: isTechnician() ? "Rappels" : "Tableau de bord",
+      href: isTechnician() ? "/reminders" : "/dashboard",
+      icon: isTechnician() ? <Bell className="h-5 w-5" /> : <Home className="h-5 w-5" />,
       role: "all",
     },
     {
@@ -61,6 +60,12 @@ const Sidebar = () => {
       role: "admin",
     },
     {
+      name: "Mes Interventions",
+      href: "/myinterventions",
+      icon: <Tool className="h-5 w-5" />,
+      role: "technicien",
+    },
+    {
       name: "Contrôles",
       href: "/controls",
       icon: <ClipboardCheck className="h-5 w-5" />,
@@ -77,7 +82,9 @@ const Sidebar = () => {
   // Filtrer selon le rôle
   const filteredNavigation = navigation.filter(
     (item) =>
-      item.role === "all" || (item.role === "admin" && isAdmin()) || (item.role === "technicien" && isTechnician()),
+      item.role === "all" ||
+      (item.role === "admin" && isAdmin()) ||
+      (item.role === "technicien" && isTechnician()),
   )
 
   return (
@@ -92,7 +99,12 @@ const Sidebar = () => {
           {!collapsed && <span className="text-xl font-bold text-primary">OxyCare</span>}
           {collapsed && <span className="text-xl font-bold text-primary">O2</span>}
         </div>
-        <Button variant="ghost" size="icon" onClick={() => setCollapsed(!collapsed)} className="h-8 w-8">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setCollapsed(!collapsed)}
+          className="h-8 w-8"
+        >
           {collapsed ? <Menu className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </Button>
       </div>
@@ -114,7 +126,9 @@ const Sidebar = () => {
               <div
                 className={cn(
                   "flex items-center",
-                  currentPath === item.href ? "text-primary" : "text-muted-foreground group-hover:text-foreground",
+                  currentPath === item.href
+                    ? "text-primary"
+                    : "text-muted-foreground group-hover:text-foreground",
                 )}
               >
                 {item.icon}
