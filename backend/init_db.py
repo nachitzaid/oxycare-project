@@ -17,6 +17,7 @@ def init_db():
         from modeles.prescripteur import Prescripteur
         from modeles.patient import Patient
         from modeles.dispositif_medical import DispositifMedical
+        from modeles.intervention import Intervention
         
         # Liste des prescripteurs à créer
         prescripteurs_data = [
@@ -109,7 +110,7 @@ def init_db():
                 'code_patient': 'P001',
                 'nom': 'Bennani',
                 'prenom': 'Ahmed',
-                'date_naissance': date(1950, 5, 15),
+                'date_naissance': date(1950, 5, 10),
                 'telephone': '+212600111001',
                 'email': 'ahmed.bennani@email.com',
                 'adresse': '123 Rue Mohammed V, Casablanca'
@@ -118,7 +119,7 @@ def init_db():
                 'code_patient': 'P002',
                 'nom': 'Alami',
                 'prenom': 'Fatima',
-                'date_naissance': date(1965, 8, 22),
+                'date_naissance': date(1965, 8, 20),
                 'telephone': '+212600111002',
                 'email': 'fatima.alami@email.com',
                 'adresse': '456 Avenue Hassan II, Rabat'
@@ -127,7 +128,7 @@ def init_db():
                 'code_patient': 'P003',
                 'nom': 'Tazi',
                 'prenom': 'Mohamed',
-                'date_naissance': date(1955, 12, 3),
+                'date_naissance': date(1955, 12, 0o3),
                 'telephone': '+212600111003',
                 'email': 'mohamed.tazi@email.com',
                 'adresse': '789 Boulevard Zerktouni, Marrakech'
@@ -305,12 +306,236 @@ def init_db():
         else:
             print("Aucun patient trouvé - impossible de créer les dispositifs médicaux")
         
+        # Créer des interventions de test
+        interventions_data = [
+            # Intervention 1: Installation terminée
+            {
+                'patient_id': 1,
+                'dispositif_id': 1,
+                'technicien_id': 2,  # technicien1
+                'type_intervention': 'Installation',
+                'planifiee': True,
+                'date_planifiee': datetime.now() - timedelta(days=10),
+                'date_reelle': datetime.now() - timedelta(days=10),
+                'temps_prevu': 60,
+                'temps_reel': 65,
+                'actions_effectuees': 'Installation du concentrateur d\'oxygène portable et formation du patient',
+                'satisfaction_technicien': 8,
+                'signature_patient': True,
+                'signature_responsable': True,
+                'commentaire': 'Patient satisfait, installation réussie'
+            },
+            # Intervention 2: Maintenance terminée
+            {
+                'patient_id': 2,
+                'dispositif_id': 2,
+                'technicien_id': 3,  # technicien2
+                'type_intervention': 'Maintenance',
+                'planifiee': True,
+                'date_planifiee': datetime.now() - timedelta(days=5),
+                'date_reelle': datetime.now() - timedelta(days=5),
+                'temps_prevu': 45,
+                'temps_reel': 50,
+                'actions_effectuees': 'Vérification et nettoyage du concentrateur stationnaire',
+                'satisfaction_technicien': 7,
+                'signature_patient': True,
+                'signature_responsable': False,
+                'commentaire': 'Maintenance effectuée sans problème'
+            },
+            # Intervention 3: Réglage planifié
+            {
+                'patient_id': 3,
+                'dispositif_id': 4,
+                'technicien_id': 2,
+                'type_intervention': 'Réglage',
+                'planifiee': True,
+                'date_planifiee': datetime.now() + timedelta(days=2),
+                'date_reelle': None,
+                'temps_prevu': 30,
+                'temps_reel': None,
+                'actions_effectuees': None,
+                'satisfaction_technicien': None,
+                'signature_patient': False,
+                'signature_responsable': False,
+                'commentaire': 'Réglage du ventilateur CPAP prévu'
+            },
+            # Intervention 4: Installation en attente
+            {
+                'patient_id': 4,
+                'dispositif_id': 5,
+                'technicien_id': 3,
+                'type_intervention': 'Installation',
+                'planifiee': False,
+                'date_planifiee': None,
+                'date_reelle': None,
+                'temps_prevu': 90,
+                'temps_reel': None,
+                'actions_effectuees': None,
+                'satisfaction_technicien': None,
+                'signature_patient': False,
+                'signature_responsable': False,
+                'commentaire': 'En attente de confirmation du patient'
+            },
+            # Intervention 5: Maintenance terminée
+            {
+                'patient_id': 5,
+                'dispositif_id': 7,
+                'technicien_id': 2,
+                'type_intervention': 'Maintenance',
+                'planifiee': True,
+                'date_planifiee': datetime.now() - timedelta(days=15),
+                'date_reelle': datetime.now() - timedelta(days=15),
+                'temps_prevu': 40,
+                'temps_reel': 45,
+                'actions_effectuees': 'Nettoyage et vérification de l\'humidificateur',
+                'satisfaction_technicien': 9,
+                'signature_patient': True,
+                'signature_responsable': True,
+                'commentaire': 'Tout fonctionne correctement'
+            },
+            # Intervention 6: Contrôle planifié
+            {
+                'patient_id': 1,
+                'dispositif_id': 3,
+                'technicien_id': 3,  # technicien2
+                'type_intervention': 'Contrôle',
+                'planifiee': True,
+                'date_planifiee': datetime.now() + timedelta(days=5),
+                'date_reelle': None,
+                'temps_prevu': 20,
+                'temps_reel': None,
+                'actions_effectuees': None,
+                'satisfaction_technicien': None,
+                'signature_patient': False,
+                'signature_responsable': False,
+                'commentaire': 'Contrôle périodique du concentrateur portable léger prévu'
+            },
+            # Intervention 7: Maintenance terminée
+            {
+                'patient_id': 2,
+                'dispositif_id': 6,
+                'technicien_id': 2,  # technicien1
+                'type_intervention': 'Maintenance',
+                'planifiee': True,
+                'date_planifiee': datetime.now() - timedelta(days=20),
+                'date_reelle': datetime.now() - timedelta(days=20),
+                'temps_prevu': 50,
+                'temps_reel': 55,
+                'actions_effectuees': 'Entretien du masque nasal CPAP',
+                'satisfaction_technicien': 8,
+                'signature_patient': True,
+                'signature_responsable': True,
+                'commentaire': 'Masque vérifié, patient formé'
+            },
+            # Intervention 8: Installation planifiée
+            {
+                'patient_id': 3,
+                'dispositif_id': 8,
+                'technicien_id': 3,
+                'type_intervention': 'Installation',
+                'planifiee': True,
+                'date_planifiee': datetime.now() + timedelta(days=1),
+                'date_reelle': None,
+                'temps_prevu': 70,
+                'temps_reel': None,
+                'actions_effectuees': None,
+                'satisfaction_technicien': None,
+                'signature_patient': False,
+                'signature_responsable': False,
+                'commentaire': 'Installation de l\'oxymètre de pouls prévue demain'
+            },
+            # Intervention 9: Réglage en attente
+            {
+                'patient_id': 4,
+                'dispositif_id': 1,
+                'technicien_id': 2,
+                'type_intervention': 'Réglage',
+                'planifiee': False,
+                'date_planifiee': None,
+                'date_reelle': None,
+                'temps_prevu': 25,
+                'temps_reel': None,
+                'actions_effectuees': None,
+                'satisfaction_technicien': None,
+                'signature_patient': False,
+                'signature_responsable': False,
+                'commentaire': 'Réglage en attente de planification'
+            },
+            # Intervention 10: Contrôle terminé
+            {
+                'patient_id': 5,
+                'dispositif_id': 4,
+                'technicien_id': 3,
+                'type_intervention': 'Contrôle',
+                'planifiee': True,
+                'date_planifiee': datetime.now() - timedelta(days=3),
+                'date_reelle': datetime.now() - timedelta(days=3),
+                'temps_prevu': 30,
+                'temps_reel': 35,
+                'actions_effectuees': 'Vérification des paramètres du ventilateur CPAP',
+                'satisfaction_technicien': 9,
+                'signature_patient': True,
+                'signature_responsable': False,
+                'commentaire': 'Contrôle satisfaisant, paramètres ajustés'
+            }
+        ]
+        
+        # Créer les interventions
+        interventions_crees = 0
+        patients = Patient.query.all()
+        dispositifs = DispositifMedical.query.filter_by(statut='actif').all()  # Seulement dispositifs actifs
+        techniciens = Utilisateur.query.filter_by(role='technicien').all()
+        
+        if patients and dispositifs and techniciens:
+            for data in interventions_data:
+                # Vérifier que les relations existent
+                patient_exists = db.session.get(Patient, data['patient_id'])
+                dispositif_exists = db.session.get(DispositifMedical, data['dispositif_id'])
+                technicien_exists = db.session.get(Utilisateur, data['technicien_id'])
+                
+                if patient_exists and dispositif_exists and technicien_exists:
+                    # Vérifier si une intervention similaire existe déjà
+                    intervention_exists = Intervention.query.filter_by(
+                        patient_id=data['patient_id'],
+                        dispositif_id=data['dispositif_id'],
+                        date_planifiee=data['date_planifiee']
+                    ).first()
+                    
+                    if not intervention_exists:
+                        intervention = Intervention(
+                            patient_id=data['patient_id'],
+                            dispositif_id=data['dispositif_id'],
+                            technicien_id=data['technicien_id'],
+                            type_intervention=data['type_intervention'],
+                            planifiee=data['planifiee'],
+                            date_planifiee=data['date_planifiee'],
+                            date_reelle=data['date_reelle'],
+                            temps_prevu=data['temps_prevu'],
+                            temps_reel=data['temps_reel'],
+                            actions_effectuees=data['actions_effectuees'],
+                            satisfaction_technicien=data['satisfaction_technicien'],
+                            signature_patient=data['signature_patient'],
+                            signature_responsable=data['signature_responsable'],
+                            commentaire=data['commentaire']
+                            # Note: If any fields above (e.g., actions_effectuees) don't match your Intervention model,
+                            # share modeles/intervention.py to adjust
+                        )
+                        db.session.add(intervention)
+                        interventions_crees += 1
+            
+            if interventions_crees > 0:
+                db.session.commit()
+                print(f"{interventions_crees} interventions créées avec succès")
+        else:
+            print("Patients, dispositifs ou techniciens manquants - impossible de créer les interventions")
+        
         # Résumé final
         print("\n=== RÉSUMÉ DE L'INITIALISATION ===")
         print(f"Prescripteurs: {Prescripteur.query.count()}")
         print(f"Utilisateurs: {Utilisateur.query.count()}")
         print(f"Patients: {Patient.query.count()}")
         print(f"Dispositifs médicaux: {DispositifMedical.query.count()}")
+        print(f"Interventions: {Intervention.query.count()}")
         
         # Statistiques des dispositifs par type
         print("\n=== RÉPARTITION DES DISPOSITIFS ===")
@@ -331,6 +556,26 @@ def init_db():
         
         for statut, count in statuts_stats:
             print(f"{statut}: {count}")
+        
+        # Statistiques des interventions par type
+        print("\n=== RÉPARTITION DES INTERVENTIONS ===")
+        interventions_stats = db.session.query(
+            Intervention.type_intervention,
+            db.func.count(Intervention.id)
+        ).group_by(Intervention.type_intervention).all()
+        
+        for type_intervention, count in interventions_stats:
+            print(f"{type_intervention}: {count}")
+        
+        # Statistiques des interventions par planifiee
+        print("\n=== RÉPARTITION DES INTERVENTIONS PAR PLANIFIÉE ===")
+        interventions_planifiee_stats = db.session.query(
+            Intervention.planifiee,
+            db.func.count(Intervention.id)
+        ).group_by(Intervention.planifiee).all()
+        
+        for planifiee, count in interventions_planifiee_stats:
+            print(f"{'Planifiée' if planifiee else 'Non planifiée'}: {count}")
 
 if __name__ == '__main__':
     init_db()

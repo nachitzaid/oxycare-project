@@ -29,6 +29,7 @@ def creer_app(nom_config=None):
     from routes.utilisateurs import utilisateurs_bp
     from routes.debug import debug_bp
     from routes.dispositifs import dispositifs_bp
+    from routes.interventions import interventions_bp
     
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(patients_bp, url_prefix='/api/patients')
@@ -36,6 +37,7 @@ def creer_app(nom_config=None):
     app.register_blueprint(utilisateurs_bp, url_prefix='/api/utilisateurs')
     app.register_blueprint(debug_bp, url_prefix='/api/debug')
     app.register_blueprint(dispositifs_bp, url_prefix='/api/dispositifs') 
+    app.register_blueprint(interventions_bp, url_prefix='/api/interventions') 
     
     # Route de test pour vérifier la connexion
     @app.route('/api/health', methods=['GET'])
@@ -66,4 +68,5 @@ if __name__ == '__main__':
     print("- GET    /api/debug/utilisateurs")
     print("- POST   /api/auth/connexion")
     print("- GET    /api/patients")
+    print("- GET    /api/interventions")
     app.run(host='0.0.0.0', port=5000, debug=True)

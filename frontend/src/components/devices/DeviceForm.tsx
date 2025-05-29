@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 
 interface Patient {
   id: number;

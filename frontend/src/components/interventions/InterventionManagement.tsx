@@ -1,542 +1,448 @@
-"use client"
+"use client";
 
-import type React from "react"
-import { useState, useEffect, useCallback } from "react"
-import axios from "@/lib/axios"
-import { toast } from "react-toastify"
-import { Search, Plus, Eye, Pencil, Trash2, RefreshCw, Calendar, Clock, Filter } from "lucide-react"
-import type { Intervention, PaginatedResponse, ApiResponse, InterventionDetail } from "../../types"
-import InterventionForm from "./InterventionForm"
-import InterventionDetails from "./InterventionDetails"
-import ConfirmDialog from "../common/ConfirmDialog"
-import Pagination from "../common/Pagination"
-import Spinner from "../common/Spinner"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { format } from "date-fns"
-import { fr } from "date-fns/locale"
-import { useAuth } from "@/contexts/AuthContext"
+import { useState, useEffect } from "react";
+import FullCalendar from "@fullcalendar/react";
+import dayGridPlugin from "@fullcalendar/daygrid";
+import timeGridPlugin from "@fullcalendar/timegrid";
+import interactionPlugin from "@fullcalendar/interaction";
+import { Search, Plus, Eye, Pencil, Trash2, RefreshCw, AlertCircle, CheckCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
+import Modal from "../common/Modal";
+import InterventionForm from "./InterventionForm";
+import InterventionDetails from "./InterventionDetails";
 
-const InterventionManagement: React.FC = () => {
-  const [interventions, setInterventions] = useState<InterventionDetail[]>([])
-  const [loading, setLoading] = useState<boolean>(true)
-  const [error, setError] = useState<string | null>(null)
-  const [currentPage, setCurrentPage] = useState<number>(1)
-  const [totalPages, setTotalPages] = useState<number>(1)
-  const [totalInterventions, setTotalInterventions] = useState<number>(0)
-  const [searchTerm, setSearchTerm] = useState<string>("")
-  const [statusFilter, setStatusFilter] = useState<string>("all")
-  const [typeFilter, setTypeFilter] = useState<string>("all")
-  const [selectedIntervention, setSelectedIntervention] = useState<InterventionDetail | null>(null)
-  const [showModal, setShowModal] = useState<boolean>(false)
-  const [modalMode, setModalMode] = useState<"create" | "edit" | "view">("create")
-  const [showConfirmDelete, setShowConfirmDelete] = useState<boolean>(false)
-  const [showFilters, setShowFilters] = useState<boolean>(false)
-
-  const { isAuthenticated, user } = useAuth()
-
-  const fetchInterventions = useCallback(
-    async (page = 1, search = "", status = "", type = "") => {
-      setLoading(true)
-      setError(null)
-
-      try {
-        // Vérification de l'authentification
-        if (!isAuthenticated()) {
-          throw new Error("Veuillez vous connecter pour accéder à cette page")
-        }
-
-        // Construire les paramètres de requête
-        const params = new URLSearchParams()
-        params.append("page", page.toString())
-        if (search) params.append("recherche", search)
-        if (status !== "all") params.append("statut", status)
-        if (type !== "all") params.append("type", type)
-
-        // Ajouter le filtre par technicien si l'utilisateur est un technicien
-        if (user?.role === "technicien" && user?.id) {
-          params.append("technicien_id", user.id.toString())
-        }
-
-        const response = await axios.get<ApiResponse<PaginatedResponse<InterventionDetail>>>(
-          `/interventions?${params.toString()}`,
-        )
-
-        if (response.data.success && response.data.data) {
-          // Traitement des données pour afficher des informations complètes
-          const processedInterventions = response.data.data.items.map((intervention) => ({
-            ...intervention,
-            patient: intervention.patient
-              ? {
-                  ...intervention.patient,
-                  nom_complet: `${intervention.patient.prenom} ${intervention.patient.nom}`,
-                }
-              : undefined,
-            dispositif: intervention.dispositif
-              ? {
-                  ...intervention.dispositif,
-                  designation_complete: `${intervention.dispositif.designation} (${intervention.dispositif.reference})`,
-                }
-              : undefined,
-          }))
-
-          setInterventions(processedInterventions)
-          setTotalPages(response.data.data.pages_totales || 1)
-          setCurrentPage(response.data.data.page_courante || 1)
-          setTotalInterventions(response.data.data.total || 0)
-        } else {
-          throw new Error(response.data.message || "Erreur lors du chargement des interventions")
-        }
-      } catch (err) {
-        console.error("Erreur lors du chargement des interventions:", err)
-        const message = err instanceof Error ? err.message : "Erreur de connexion au serveur"
-        setError(message)
-        toast.error(message)
-        setInterventions([])
-      } finally {
-        setLoading(false)
-      }
-    },
-    [isAuthenticated, user],
-  )
-
-  useEffect(() => {
-    fetchInterventions(currentPage, searchTerm, statusFilter, typeFilter)
-  }, [currentPage, fetchInterventions, statusFilter, typeFilter])
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault()
-    setCurrentPage(1)
-    fetchInterventions(1, searchTerm, statusFilter, typeFilter)
-  }
-
-  const handleFilterChange = (filterType: "status" | "type", value: string) => {
-    if (filterType === "status") {
-      setStatusFilter(value)
-    } else {
-      setTypeFilter(value)
-    }
-    setCurrentPage(1)
-  }
-
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page)
-  }
-
-  const openCreateModal = () => {
-    setSelectedIntervention(null)
-    setModalMode("create")
-    setShowModal(true)
-  }
-
-  const openEditModal = (intervention: InterventionDetail) => {
-    setSelectedIntervention(intervention)
-    setModalMode("edit")
-    setShowModal(true)
-  }
-
-  const openViewModal = (intervention: InterventionDetail) => {
-    setSelectedIntervention(intervention)
-    setModalMode("view")
-    setShowModal(true)
-  }
-
-  const openDeleteConfirm = (intervention: InterventionDetail) => {
-    setSelectedIntervention(intervention)
-    setShowConfirmDelete(true)
-  }
-
-  const handleDelete = async () => {
-    if (!selectedIntervention) return
-
-    try {
-      const response = await axios.delete<ApiResponse>(`/interventions/${selectedIntervention.id}`)
-
-      if (response.data.success) {
-        toast.success("Intervention supprimée avec succès")
-        fetchInterventions(currentPage, searchTerm, statusFilter, typeFilter)
-      } else {
-        throw new Error(response.data.message || "Erreur lors de la suppression")
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Erreur de connexion au serveur"
-      toast.error(message)
-    } finally {
-      setShowConfirmDelete(false)
-    }
-  }
-
-  const handleFormSubmit = async (interventionData: Partial<Intervention>) => {
-    try {
-      let response
-
-      if (modalMode === "create") {
-        response = await axios.post<ApiResponse>("/interventions", interventionData)
-      } else if (modalMode === "edit" && selectedIntervention) {
-        response = await axios.put<ApiResponse>(`/interventions/${selectedIntervention.id}`, interventionData)
-      } else {
-        throw new Error("Mode d'opération invalide")
-      }
-
-      if (response.data.success) {
-        toast.success(
-          modalMode === "create" ? "Intervention créée avec succès" : "Intervention mise à jour avec succès",
-        )
-        setShowModal(false)
-        fetchInterventions(currentPage, searchTerm, statusFilter, typeFilter)
-      } else {
-        throw new Error(response.data.message || "Erreur lors de l'opération")
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Erreur de connexion au serveur"
-      toast.error(message)
-      return false
-    }
-    return true
-  }
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "planifiee":
-        return (
-          <Badge variant="outline" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
-            Planifiée
-          </Badge>
-        )
-      case "en_cours":
-        return (
-          <Badge variant="outline" className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300">
-            En cours
-          </Badge>
-        )
-      case "terminee":
-        return (
-          <Badge variant="outline" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
-            Terminée
-          </Badge>
-        )
-      case "annulee":
-        return (
-          <Badge variant="outline" className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300">
-            Annulée
-          </Badge>
-        )
-      default:
-        return <Badge variant="outline">{status}</Badge>
-    }
-  }
-
-  const getTypeBadge = (type: string) => {
-    switch (type) {
-      case "installation":
-        return (
-          <Badge variant="outline" className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300">
-            Installation
-          </Badge>
-        )
-      case "maintenance":
-        return (
-          <Badge variant="outline" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
-            Maintenance
-          </Badge>
-        )
-      case "reparation":
-        return (
-          <Badge variant="outline" className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300">
-            Réparation
-          </Badge>
-        )
-      case "remplacement":
-        return (
-          <Badge variant="outline" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
-            Remplacement
-          </Badge>
-        )
-      case "formation":
-        return (
-          <Badge variant="outline" className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300">
-            Formation
-          </Badge>
-        )
-      default:
-        return <Badge variant="outline">{type}</Badge>
-    }
-  }
-
-  const formatDateTime = (date: string, time: string) => {
-    try {
-      if (!date) return "Non défini"
-
-      const fullDate = new Date(`${date}T${time || "00:00"}`)
-      return format(fullDate, "d MMM yyyy à HH'h'mm", { locale: fr })
-    } catch (error) {
-      console.error("Erreur de formatage de date:", error)
-      return "Date invalide"
-    }
-  }
-
-  return (
-    <div className="container mx-auto p-4 animate-fadeIn">
-      <Card className="border-border/40 shadow-sm">
-        <CardHeader className="pb-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <CardTitle className="text-2xl font-bold">Gestion des Interventions</CardTitle>
-              <CardDescription>
-                {totalInterventions > 0 ? (
-                  <span>
-                    {totalInterventions} intervention{totalInterventions > 1 ? "s" : ""} au total
-                  </span>
-                ) : (
-                  "Gérez les interventions techniques"
-                )}
-              </CardDescription>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => fetchInterventions(currentPage, searchTerm, statusFilter, typeFilter)}
-                disabled={loading}
-                title="Rafraîchir"
-              >
-                <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-                <span className="sr-only">Rafraîchir</span>
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => setShowFilters(!showFilters)}
-                className={showFilters ? "bg-muted" : ""}
-                title="Filtres"
-              >
-                <Filter className="h-4 w-4" />
-                <span className="sr-only">Filtres</span>
-              </Button>
-              <Button onClick={openCreateModal} className="w-full sm:w-auto">
-                <Plus className="mr-2 h-4 w-4" /> Nouvelle Intervention
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="mb-6 space-y-4">
-            <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-2">
-              <div className="relative flex-grow">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Rechercher par patient, dispositif ou technicien..."
-                  className="pl-9"
-                />
-              </div>
-              <Button type="submit" className="w-full sm:w-auto" disabled={loading}>
-                Rechercher
-              </Button>
-            </form>
-
-            {showFilters && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-muted/30 rounded-md">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Statut</label>
-                  <Select value={statusFilter} onValueChange={(value) => handleFilterChange("status", value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Tous les statuts" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Tous les statuts</SelectItem>
-                      <SelectItem value="planifiee">Planifiée</SelectItem>
-                      <SelectItem value="en_cours">En cours</SelectItem>
-                      <SelectItem value="terminee">Terminée</SelectItem>
-                      <SelectItem value="annulee">Annulée</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Type</label>
-                  <Select value={typeFilter} onValueChange={(value) => handleFilterChange("type", value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Tous les types" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Tous les types</SelectItem>
-                      <SelectItem value="installation">Installation</SelectItem>
-                      <SelectItem value="maintenance">Maintenance</SelectItem>
-                      <SelectItem value="reparation">Réparation</SelectItem>
-                      <SelectItem value="remplacement">Remplacement</SelectItem>
-                      <SelectItem value="formation">Formation</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {loading ? (
-            <Spinner />
-          ) : error ? (
-            <div className="text-destructive text-center py-8 bg-destructive/10 rounded-md flex flex-col items-center">
-              <p className="mb-4">{error}</p>
-              <Button
-                variant="outline"
-                onClick={() => fetchInterventions(currentPage, searchTerm, statusFilter, typeFilter)}
-              >
-                <RefreshCw className="mr-2 h-4 w-4" /> Réessayer
-              </Button>
-            </div>
-          ) : (
-            <>
-              <div className="rounded-md border overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[100px]">Date</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Patient</TableHead>
-                      <TableHead className="hidden md:table-cell">Dispositif</TableHead>
-                      <TableHead className="hidden md:table-cell">Technicien</TableHead>
-                      <TableHead>Statut</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {interventions.length > 0 ? (
-                      interventions.map((intervention) => (
-                        <TableRow key={intervention.id} className="hover:bg-muted/50">
-                          <TableCell className="font-medium">
-                            <div className="flex flex-col">
-                              <div className="flex items-center">
-                                <Calendar className="h-3.5 w-3.5 mr-1 text-muted-foreground" />
-                                <span>{format(new Date(intervention.date_planifiee), "dd/MM/yyyy")}</span>
-                              </div>
-                              <div className="flex items-center text-xs text-muted-foreground">
-                                <Clock className="h-3 w-3 mr-1" />
-                                <span>{intervention.heure_planifiee}</span>
-                              </div>
-                              {intervention.est_urgente && (
-                                <Badge variant="destructive" className="mt-1 text-[10px] h-5">
-                                  Urgente
-                                </Badge>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>{getTypeBadge(intervention.type)}</TableCell>
-                          <TableCell>
-                            {intervention.patient?.nom_complet || `Patient #${intervention.patient_id}`}
-                          </TableCell>
-                          <TableCell className="hidden md:table-cell">
-                            {intervention.dispositif?.designation_complete ||
-                              `Dispositif #${intervention.dispositif_id}`}
-                          </TableCell>
-                          <TableCell className="hidden md:table-cell">
-                            {intervention.technicien
-                              ? `${intervention.technicien.prenom} ${intervention.technicien.nom}`
-                              : `Technicien #${intervention.technicien_id}`}
-                          </TableCell>
-                          <TableCell>{getStatusBadge(intervention.statut)}</TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-2">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => openViewModal(intervention)}
-                                className="h-8 w-8 text-primary"
-                              >
-                                <Eye className="h-4 w-4" />
-                                <span className="sr-only">Voir</span>
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => openEditModal(intervention)}
-                                className="h-8 w-8 text-amber-500"
-                              >
-                                <Pencil className="h-4 w-4" />
-                                <span className="sr-only">Modifier</span>
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => openDeleteConfirm(intervention)}
-                                className="h-8 w-8 text-destructive"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                                <span className="sr-only">Supprimer</span>
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={7} className="h-24 text-center">
-                          {searchTerm || statusFilter !== "all" || typeFilter !== "all" ? (
-                            <div className="flex flex-col items-center">
-                              <p className="mb-2">Aucune intervention ne correspond à votre recherche</p>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => {
-                                  setSearchTerm("")
-                                  setStatusFilter("all")
-                                  setTypeFilter("all")
-                                  fetchInterventions(1, "", "all", "all")
-                                }}
-                              >
-                                Effacer les filtres
-                              </Button>
-                            </div>
-                          ) : (
-                            "Aucune intervention trouvée"
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-
-              {totalPages > 1 && (
-                <div className="mt-4">
-                  <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={handlePageChange} />
-                </div>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {showModal &&
-        (modalMode === "view" ? (
-          <InterventionDetails intervention={selectedIntervention} onClose={() => setShowModal(false)} />
-        ) : (
-          <InterventionForm
-            mode={modalMode}
-            intervention={selectedIntervention}
-            onSubmit={handleFormSubmit}
-            onClose={() => setShowModal(false)}
-          />
-        ))}
-
-      {showConfirmDelete && selectedIntervention && (
-        <ConfirmDialog
-          title="Confirmer la suppression"
-          message={`Êtes-vous sûr de vouloir supprimer cette intervention ${selectedIntervention.type} prévue le ${format(new Date(selectedIntervention.date_planifiee), "dd/MM/yyyy")} ?`}
-          onConfirm={handleDelete}
-          onCancel={() => setShowConfirmDelete(false)}
-          variant="danger"
-          confirmText="Supprimer"
-          cancelText="Annuler"
-        />
-      )}
-    </div>
-  )
+// Types
+interface Patient {
+  id: number;
+  code_patient: string;
+  nom: string;
+  prenom: string;
+  telephone?: string;
+  email?: string;
 }
 
-export default InterventionManagement
+interface DispositifMedical {
+  id: number;
+  designation: string;
+  reference: string;
+  numero_serie: string;
+}
+
+interface Utilisateur {
+  id: number;
+  nom: string;
+  prenom: string;
+  email: string;
+}
+
+interface Intervention {
+  id: number;
+  patient_id: number;
+  dispositif_id: number;
+  technicien_id: number;
+  type_intervention: string;
+  planifiee: boolean;
+  date_planifiee: string | null;
+  date_reelle: string | null;
+  temps_prevu: number | null;
+  temps_reel: number | null;
+  actions_effectuees: any;
+  satisfaction_technicien: number | null;
+  signature_patient: boolean;
+  signature_responsable: boolean;
+  commentaire: string | null;
+  date_creation: string | null;
+  patient?: Patient;
+  dispositif?: DispositifMedical;
+  technicien?: Utilisateur;
+}
+
+interface ApiResponse {
+  success?: boolean;
+  data?: any;
+  message?: string;
+  errors?: any;
+}
+
+const InterventionManagementAdmin = () => {
+  const [interventions, setInterventions] = useState<Intervention[]>([]);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingIntervention, setEditingIntervention] = useState<Intervention | null>(null);
+  const [viewingIntervention, setViewingIntervention] = useState<Intervention | null>(null);
+  const [deletingIntervention, setDeletingIntervention] = useState<Intervention | null>(null);
+
+  const API_BASE_URL = "http://localhost:5000/api";
+
+  // Generic API request function
+  const makeRequest = async (url: string, options: any = {}) => {
+    const token = localStorage.getItem("token");
+    const config = {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token && { Authorization: `Bearer ${token}` }),
+        ...options.headers,
+      },
+      ...options,
+    };
+
+    try {
+      const response = await fetch(`${API_BASE_URL}${url}`, config);
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      return data;
+    } catch (error) {
+      console.error(`Erreur requête ${url}:`, error);
+      throw error;
+    }
+  };
+
+  // Show success/error messages
+  const showMessage = (message: string, type: "success" | "error") => {
+    if (type === "success") {
+      setSuccess(message);
+      setTimeout(() => setSuccess(null), 5000);
+    } else {
+      setError(message);
+      setTimeout(() => setError(null), 5000);
+    }
+  };
+
+  // Fetch interventions
+  const fetchInterventions = async (search = "") => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const params = new URLSearchParams();
+      if (search) params.append("recherche", search);
+      const data = await makeRequest(`/interventions?${params.toString()}`);
+      if (data.success && Array.isArray(data.data.items)) {
+        const cleanedInterventions = data.data.items.map((intervention: any) => ({
+          id: intervention.id,
+          patient_id: intervention.patient_id,
+          dispositif_id: intervention.dispositif_id,
+          technicien_id: intervention.technicien_id,
+          type_intervention: intervention.type_intervention,
+          planifiee: intervention.planifiee,
+          date_planifiee: intervention.date_planifiee,
+          date_reelle: intervention.date_reelle,
+          temps_prevu: intervention.temps_prevu,
+          temps_reel: intervention.temps_reel,
+          actions_effectuees: intervention.actions_effectuees,
+          satisfaction_technicien: intervention.satisfaction_technicien,
+          signature_patient: intervention.signature_patient,
+          signature_responsable: intervention.signature_responsable,
+          commentaire: intervention.commentaire,
+          date_creation: intervention.date_creation,
+          patient: intervention.patient || null,
+          dispositif: intervention.dispositif || null,
+          technicien: intervention.technicien || null,
+        }));
+        setInterventions(cleanedInterventions);
+      } else {
+        throw new Error(data.message || "Erreur lors du chargement des interventions");
+      }
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : "Erreur lors du chargement des interventions", "error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch patients
+  const fetchPatients = async () => {
+    try {
+      const data = await makeRequest("/debug/patients");
+      if (data.success && Array.isArray(data.patients)) {
+        setPatients(data.patients);
+      } else {
+        showMessage(data.message || "Erreur lors de la récupération des patients", "error");
+      }
+    } catch (error) {
+      showMessage("Erreur lors de la récupération des patients", "error");
+    }
+  };
+
+  // Create intervention
+  const handleCreateIntervention = async (interventionData: Partial<Intervention>) => {
+    try {
+      const response = await makeRequest("/interventions", {
+        method: "POST",
+        body: JSON.stringify(interventionData),
+      });
+
+      if (response.success) {
+        showMessage("Intervention créée avec succès", "success");
+        setShowCreateModal(false);
+        await fetchInterventions(searchTerm);
+      } else {
+        throw new Error(response.message || "Erreur lors de la création");
+      }
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : "Erreur lors de la création de l'intervention", "error");
+    }
+  };
+
+  // Edit intervention
+  const handleEditIntervention = async (interventionData: Partial<Intervention>) => {
+    if (!editingIntervention) return;
+
+    try {
+      const response = await makeRequest(`/interventions/${editingIntervention.id}`, {
+        method: "PUT",
+        body: JSON.stringify(interventionData),
+      });
+
+      if (response.success) {
+        showMessage("Intervention modifiée avec succès", "success");
+        setEditingIntervention(null);
+        await fetchInterventions(searchTerm);
+      } else {
+        throw new Error(response.message || "Erreur lors de la modification");
+      }
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : "Erreur lors de la modification de l'intervention", "error");
+    }
+  };
+
+  // Delete intervention
+  const handleDeleteIntervention = async () => {
+    if (!deletingIntervention) return;
+
+    try {
+      const response = await makeRequest(`/interventions/${deletingIntervention.id}`, {
+        method: "DELETE",
+      });
+
+      if (response.success) {
+        showMessage("Intervention supprimée avec succès", "success");
+        setDeletingIntervention(null);
+        await fetchInterventions(searchTerm);
+      } else {
+        throw new Error(response.message || "Erreur lors de la suppression");
+      }
+    } catch (err) {
+      showMessage(err instanceof Error ? err.message : "Erreur lors de la suppression de l'intervention", "error");
+    }
+  };
+
+  // Handle calendar event click
+  const handleEventClick = (info: any) => {
+    const intervention = interventions.find((int) => int.id.toString() === info.event.id);
+    if (intervention) {
+      setViewingIntervention(intervention);
+    }
+  };
+
+  // Handle date click to create new intervention
+  const handleDateClick = (info: any) => {
+    setShowCreateModal(true);
+    setEditingIntervention(null);
+  };
+
+  // Format events for FullCalendar
+  const calendarEvents = interventions.map((intervention) => ({
+    id: intervention.id.toString(),
+    title: `${intervention.type_intervention} - ${intervention.patient ? `${intervention.patient.prenom} ${intervention.patient.nom}` : "Patient inconnu"}`,
+    start: intervention.date_planifiee,
+    end: intervention.date_planifiee
+      ? new Date(new Date(intervention.date_planifiee).getTime() + (intervention.temps_prevu || 60) * 60 * 1000)
+      : null,
+    backgroundColor: intervention.planifiee ? "#3b82f6" : "#ef4444",
+    borderColor: intervention.planifiee ? "#2563eb" : "#dc2626",
+    extendedProps: {
+      intervention,
+    },
+  }));
+
+  // Initial data fetch
+  useEffect(() => {
+    fetchInterventions();
+    fetchPatients();
+  }, []);
+
+  return (
+    <div className="container mx-auto p-6 max-w-7xl">
+      {/* Header */}
+      <div className="mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Gestion des Interventions (Admin)</h1>
+            <p className="text-gray-600 mt-1">
+              {interventions.length > 0 ? `${interventions.length} intervention(s) trouvée(s)` : "Chargement..."}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={() => fetchInterventions(searchTerm)} disabled={loading} variant="outline" className="flex items-center gap-2">
+              <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+              Actualiser
+            </Button>
+            <Button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2">
+              <Plus className="w-4 h-4" />
+              Nouvelle Intervention
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Messages */}
+      {success && (
+        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+          <div className="flex items-center gap-2 text-green-800">
+            <CheckCircle className="w-5 h-5" />
+            <span>{success}</span>
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="flex items-center gap-2 text-red-800">
+            <AlertCircle className="w-5 h-5" />
+            <span>{error}</span>
+          </div>
+        </div>
+      )}
+
+      {/* Search bar */}
+      <div className="mb-6">
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+          <Input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              fetchInterventions(e.target.value);
+            }}
+            placeholder="Rechercher par patient, dispositif ou technicien..."
+            className="pl-10"
+          />
+        </div>
+      </div>
+
+      {/* Loading */}
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <div className="flex items-center gap-3 text-blue-600">
+            <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+            <span>Chargement des interventions...</span>
+          </div>
+        </div>
+      )}
+
+      {/* Calendar */}
+      {!loading && (
+        <Card>
+          <CardContent className="p-6">
+            {interventions.length === 0 && searchTerm ? (
+              <div className="text-center py-12">
+                <div className="text-gray-400 mb-2">
+                  <Search className="w-12 h-12 mx-auto" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-1">Aucun résultat</h3>
+                <p className="text-gray-500">Aucune intervention trouvée pour "{searchTerm}"</p>
+              </div>
+            ) : (
+              <FullCalendar
+                plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+                initialView="dayGridMonth"
+                headerToolbar={{
+                  left: "prev,next today",
+                  center: "title",
+                  right: "dayGridMonth,timeGridWeek,timeGridDay",
+                }}
+                events={calendarEvents}
+                eventClick={handleEventClick}
+                dateClick={handleDateClick}
+                editable={true}
+                selectable={true}
+                locale="fr"
+                height="auto"
+                firstDay={1}
+                buttonText={{
+                  today: "Aujourd'hui",
+                  month: "Mois",
+                  week: "Semaine",
+                  day: "Jour",
+                }}
+              />
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Modals */}
+      {showCreateModal && (
+        <InterventionForm
+          mode="create"
+          intervention={null}
+          onSubmit={handleCreateIntervention}
+          onClose={() => setShowCreateModal(false)}
+          patients={patients}
+        />
+      )}
+
+      {editingIntervention && (
+        <InterventionForm
+          mode="edit"
+          intervention={editingIntervention}
+          onSubmit={handleEditIntervention}
+          onClose={() => setEditingIntervention(null)}
+          patients={patients}
+        />
+      )}
+
+      {viewingIntervention && (
+        <InterventionDetails
+          intervention={viewingIntervention}
+          onClose={() => setViewingIntervention(null)}
+        />
+      )}
+
+      {deletingIntervention && (
+        <Modal isOpen={true} onClose={() => setDeletingIntervention(null)} title="Confirmer la suppression">
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 text-red-600">
+              <AlertCircle className="w-6 h-6" />
+              <div>
+                <h3 className="font-medium">Êtes-vous sûr de vouloir supprimer cette intervention ?</h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  {deletingIntervention.type_intervention} -{" "}
+                  {deletingIntervention.patient
+                    ? `${deletingIntervention.patient.prenom} ${deletingIntervention.patient.nom}`
+                    : "Patient inconnu"}
+                </p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600">
+              Cette action est irréversible et supprimera définitivement toutes les données associées à cette intervention.
+            </p>
+            <div className="flex justify-end gap-3 pt-4">
+              <Button onClick={() => setDeletingIntervention(null)} variant="outline">
+                Annuler
+              </Button>
+              <Button onClick={handleDeleteIntervention} variant="destructive">
+                Supprimer
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+};
+
+export default InterventionManagementAdmin;

@@ -58,7 +58,7 @@ const Sidebar = () => {
       name: "Interventions",
       href: "/interventions",
       icon: <Tool className="h-5 w-5" />,
-      role: "technicien",
+      role: "admin",
     },
     {
       name: "Contrôles",
