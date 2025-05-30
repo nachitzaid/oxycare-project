@@ -477,3 +477,68 @@ def modifier_intervention(intervention_id):
             'message': 'Erreur lors de la modification de l\'intervention',
             'error': str(e)
         }), 500
+
+@interventions_bp.route('/<int:intervention_id>', methods=['DELETE'])
+@jwt_required()
+def supprimer_intervention(intervention_id):
+    """Supprimer une intervention"""
+    try:
+        # Récupérer l'ID de l'utilisateur et les claims du token
+        user_id = get_jwt_identity()
+        claims = get_jwt()
+        
+        if not user_id:
+            logger.error("No user identity found in JWT token")
+            return jsonify({
+                'success': False,
+                'message': 'Token invalide ou expiré'
+            }), 401
+
+        user_role = claims.get('role')
+        if not user_role:
+            logger.error(f"Invalid user data in JWT token: {claims}")
+            return jsonify({
+                'success': False,
+                'message': 'Données utilisateur invalides'
+            }), 401
+
+        # Récupérer l'intervention
+        intervention = Intervention.query.get(intervention_id)
+        if not intervention:
+            return jsonify({
+                'success': False,
+                'message': 'Intervention non trouvée'
+            }), 404
+
+        # Vérifier les permissions
+        if user_role == 'technicien' and intervention.technicien_id != user_id:
+            return jsonify({
+                'success': False,
+                'message': 'Vous n\'êtes pas autorisé à supprimer cette intervention'
+            }), 403
+
+        # Supprimer l'intervention
+        try:
+            db.session.delete(intervention)
+            db.session.commit()
+            logger.info(f"Intervention {intervention_id} supprimée avec succès")
+            return jsonify({
+                'success': True,
+                'message': 'Intervention supprimée avec succès'
+            }), 200
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erreur lors de la suppression de l'intervention: {str(e)}\n{traceback.format_exc()}")
+            return jsonify({
+                'success': False,
+                'message': 'Erreur lors de la suppression de l\'intervention',
+                'error': str(e)
+            }), 500
+
+    except Exception as e:
+        logger.error(f"Erreur non gérée: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({
+            'success': False,
+            'message': 'Erreur lors de la suppression de l\'intervention',
+            'error': str(e)
+        }), 500

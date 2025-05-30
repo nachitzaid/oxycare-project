@@ -168,23 +168,22 @@ const InterventionManagementAdmin = () => {
   };
 
   // Handle intervention deletion
-  const handleDeleteIntervention = async () => {
-    if (!deletingIntervention) return;
-
+  const handleDeleteIntervention = async (interventionId: number) => {
     try {
-      const response = await makeRequest(`/interventions/${deletingIntervention.id}`, {
-        method: "DELETE",
+      const response = await makeRequest(`/interventions/${interventionId}`, {
+        method: 'DELETE',
       });
 
       if (response.success) {
         showMessage("Intervention supprimée avec succès", "success");
-        setDeletingIntervention(null);
         await fetchInterventions(searchTerm);
       } else {
         throw new Error(response.message || "Erreur lors de la suppression");
       }
-    } catch (err) {
-      showMessage(err instanceof Error ? err.message : "Erreur lors de la suppression de l'intervention", "error");
+    } catch (error) {
+      console.error('Erreur lors de la suppression:', error);
+      showMessage(error instanceof Error ? error.message : "Erreur lors de la suppression de l'intervention", "error");
+      throw error;
     }
   };
 
@@ -360,6 +359,7 @@ const InterventionManagementAdmin = () => {
             setViewingIntervention(null);
             setEditingIntervention(intervention);
           }}
+          onDelete={handleDeleteIntervention}
         />
       )}
 
@@ -385,7 +385,7 @@ const InterventionManagementAdmin = () => {
               <Button onClick={() => setDeletingIntervention(null)} variant="outline">
                 Annuler
               </Button>
-              <Button onClick={handleDeleteIntervention} variant="destructive">
+              <Button onClick={() => handleDeleteIntervention(deletingIntervention.id)} variant="destructive">
                 Supprimer
               </Button>
             </div>

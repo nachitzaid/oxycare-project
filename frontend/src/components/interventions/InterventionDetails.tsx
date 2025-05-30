@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import { useState } from "react"
 import Modal from "../common/Modal"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -21,7 +22,19 @@ import {
   Star,
   UserCheck,
   FileSignature,
+  X,
+  Trash2,
 } from "lucide-react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 // Types basés sur votre structure de données réelle
 interface Patient {
@@ -76,10 +89,32 @@ interface InterventionDetailsProps {
   intervention: Intervention | null
   onClose: () => void
   onEdit?: (intervention: Intervention) => void
+  onDelete?: (interventionId: number) => Promise<void>
 }
 
-const InterventionDetails: React.FC<InterventionDetailsProps> = ({ intervention, onClose, onEdit }) => {
+const InterventionDetails: React.FC<InterventionDetailsProps> = ({ intervention, onClose, onEdit, onDelete }) => {
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
   if (!intervention) return null
+
+  const handleDelete = async () => {
+    if (!onDelete) return
+    
+    setIsDeleting(true)
+    setError(null)
+    
+    try {
+      await onDelete(intervention.id)
+      setShowDeleteConfirm(false)
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Une erreur est survenue lors de la suppression")
+    } finally {
+      setIsDeleting(false)
+    }
+  }
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return "Non définie"
@@ -196,6 +231,17 @@ const InterventionDetails: React.FC<InterventionDetailsProps> = ({ intervention,
               >
                 <Tool className="h-4 w-4" />
                 Modifier
+              </Button>
+            )}
+            {onDelete && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setShowDeleteConfirm(true)}
+                className="flex items-center gap-1"
+              >
+                <Trash2 className="h-4 w-4" />
+                Supprimer
               </Button>
             )}
           </div>
@@ -419,6 +465,28 @@ const InterventionDetails: React.FC<InterventionDetailsProps> = ({ intervention,
           <Button onClick={onClose}>Fermer</Button>
         </div>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Êtes-vous sûr de vouloir supprimer cette intervention ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Cette action est irréversible. Toutes les données associées à cette intervention seront définitivement supprimées.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {isDeleting ? "Suppression..." : "Supprimer"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Modal>
   )
 }
