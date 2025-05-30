@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/app/contexts/AuthContext";
+import { useInterventions } from "@/hooks/useInterventions";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
@@ -23,20 +26,6 @@ interface Patient {
   email?: string;
 }
 
-interface DispositifMedical {
-  id: number;
-  designation: string;
-  reference: string;
-  numero_serie: string;
-}
-
-interface Utilisateur {
-  id: number;
-  nom: string;
-  prenom: string;
-  email: string;
-}
-
 interface Intervention {
   id: number;
   patient_id: number;
@@ -55,118 +44,43 @@ interface Intervention {
   commentaire: string | null;
   date_creation: string | null;
   patient?: Patient;
-  dispositif?: DispositifMedical;
-  technicien?: Utilisateur;
-}
-
-interface ApiResponse {
-  success?: boolean;
-  data?: any;
-  message?: string;
-  errors?: any;
+  dispositif?: any;
+  technicien?: any;
 }
 
 const InterventionManagementAdmin = () => {
-  const [interventions, setInterventions] = useState<Intervention[]>([]);
+  const { user, isAuthenticated, isAdmin, loading: authLoading } = useAuth();
+  const { 
+    interventions, 
+    loading, 
+    error, 
+    success, 
+    fetchInterventions, 
+    createIntervention,
+    makeRequest, 
+    showMessage 
+  } = useInterventions();
   const [patients, setPatients] = useState<Patient[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingIntervention, setEditingIntervention] = useState<Intervention | null>(null);
   const [viewingIntervention, setViewingIntervention] = useState<Intervention | null>(null);
   const [deletingIntervention, setDeletingIntervention] = useState<Intervention | null>(null);
+  const router = useRouter();
 
-  const API_BASE_URL = "http://localhost:5000/api";
-
-  // Generic API request function
-  const makeRequest = async (url: string, options: any = {}) => {
-    const token = localStorage.getItem("token");
-    const config = {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token && { Authorization: `Bearer ${token}` }),
-        ...options.headers,
-      },
-      ...options,
-    };
-
-    try {
-      const response = await fetch(`${API_BASE_URL}${url}`, config);
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || `HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      return data;
-    } catch (error) {
-      console.error(`Erreur requête ${url}:`, error);
-      throw error;
+  // Redirect non-admins or unauthenticated users
+  useEffect(() => {
+    if (!authLoading && (!isAuthenticated() || !isAdmin())) {
+      router.push("/login?redirect=/interventions");
     }
-  };
-
-  // Show success/error messages
-  const showMessage = (message: string, type: "success" | "error") => {
-    if (type === "success") {
-      setSuccess(message);
-      setTimeout(() => setSuccess(null), 5000);
-    } else {
-      setError(message);
-      setTimeout(() => setError(null), 5000);
-    }
-  };
-
-  // Fetch interventions
-  const fetchInterventions = async (search = "") => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const params = new URLSearchParams();
-      if (search) params.append("recherche", search);
-      const data = await makeRequest(`/interventions?${params.toString()}`);
-      if (data.success && Array.isArray(data.data.items)) {
-        const cleanedInterventions = data.data.items.map((intervention: any) => ({
-          id: intervention.id,
-          patient_id: intervention.patient_id,
-          dispositif_id: intervention.dispositif_id,
-          technicien_id: intervention.technicien_id,
-          type_intervention: intervention.type_intervention,
-          planifiee: intervention.planifiee,
-          date_planifiee: intervention.date_planifiee,
-          date_reelle: intervention.date_reelle,
-          temps_prevu: intervention.temps_prevu,
-          temps_reel: intervention.temps_reel,
-          actions_effectuees: intervention.actions_effectuees,
-          satisfaction_technicien: intervention.satisfaction_technicien,
-          signature_patient: intervention.signature_patient,
-          signature_responsable: intervention.signature_responsable,
-          commentaire: intervention.commentaire,
-          date_creation: intervention.date_creation,
-          patient: intervention.patient || null,
-          dispositif: intervention.dispositif || null,
-          technicien: intervention.technicien || null,
-        }));
-        setInterventions(cleanedInterventions);
-      } else {
-        throw new Error(data.message || "Erreur lors du chargement des interventions");
-      }
-    } catch (err) {
-      showMessage(err instanceof Error ? err.message : "Erreur lors du chargement des interventions", "error");
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [authLoading, isAuthenticated, isAdmin, router]);
 
   // Fetch patients
   const fetchPatients = async () => {
     try {
       const data = await makeRequest("/debug/patients");
-      if (data.success && Array.isArray(data.patients)) {
-        setPatients(data.patients);
+      if (data.success && Array.isArray(data.data)) {
+        setPatients(data.data);
       } else {
         showMessage(data.message || "Erreur lors de la récupération des patients", "error");
       }
@@ -175,27 +89,63 @@ const InterventionManagementAdmin = () => {
     }
   };
 
-  // Create intervention
+  // Initial data fetch
+  useEffect(() => {
+    let mounted = true;
+    if (!authLoading && isAuthenticated() && isAdmin() && mounted) {
+      const loadData = async () => {
+        try {
+          await Promise.all([
+            fetchInterventions(),
+            fetchPatients()
+          ]);
+        } catch (error) {
+          console.error("Erreur lors du chargement initial:", error);
+        }
+      };
+      loadData();
+    }
+    return () => {
+      mounted = false;
+    };
+  }, [authLoading, isAuthenticated, isAdmin]);
+
+  // Handle search with debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchTerm) {
+        fetchInterventions(searchTerm);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Handle intervention creation
   const handleCreateIntervention = async (interventionData: Partial<Intervention>) => {
     try {
-      const response = await makeRequest("/interventions", {
-        method: "POST",
-        body: JSON.stringify(interventionData),
+      const result = await createIntervention({
+        patient_id: interventionData.patient_id!,
+        dispositif_id: interventionData.dispositif_id!,
+        date_intervention: interventionData.date_planifiee!,
+        type_intervention: interventionData.type_intervention!,
+        technicien_id: interventionData.technicien_id,
+        statut: interventionData.planifiee ? "planifiée" : "en cours",
+        description: interventionData.commentaire || undefined,
+        notes: interventionData.commentaire || undefined
       });
 
-      if (response.success) {
-        showMessage("Intervention créée avec succès", "success");
+      if (result) {
         setShowCreateModal(false);
         await fetchInterventions(searchTerm);
-      } else {
-        throw new Error(response.message || "Erreur lors de la création");
       }
     } catch (err) {
+      console.error("Erreur lors de la création:", err);
       showMessage(err instanceof Error ? err.message : "Erreur lors de la création de l'intervention", "error");
     }
   };
 
-  // Edit intervention
+  // Handle intervention edit
   const handleEditIntervention = async (interventionData: Partial<Intervention>) => {
     if (!editingIntervention) return;
 
@@ -217,7 +167,7 @@ const InterventionManagementAdmin = () => {
     }
   };
 
-  // Delete intervention
+  // Handle intervention deletion
   const handleDeleteIntervention = async () => {
     if (!deletingIntervention) return;
 
@@ -256,10 +206,10 @@ const InterventionManagementAdmin = () => {
   const calendarEvents = interventions.map((intervention) => ({
     id: intervention.id.toString(),
     title: `${intervention.type_intervention} - ${intervention.patient ? `${intervention.patient.prenom} ${intervention.patient.nom}` : "Patient inconnu"}`,
-    start: intervention.date_planifiee,
+    start: intervention.date_planifiee || undefined,
     end: intervention.date_planifiee
       ? new Date(new Date(intervention.date_planifiee).getTime() + (intervention.temps_prevu || 60) * 60 * 1000)
-      : null,
+      : undefined,
     backgroundColor: intervention.planifiee ? "#3b82f6" : "#ef4444",
     borderColor: intervention.planifiee ? "#2563eb" : "#dc2626",
     extendedProps: {
@@ -267,11 +217,10 @@ const InterventionManagementAdmin = () => {
     },
   }));
 
-  // Initial data fetch
-  useEffect(() => {
-    fetchInterventions();
-    fetchPatients();
-  }, []);
+  // Skip render until auth is resolved
+  if (authLoading || !isAuthenticated() || !isAdmin()) {
+    return null;
+  }
 
   return (
     <div className="container mx-auto p-6 max-w-7xl">
@@ -323,10 +272,7 @@ const InterventionManagementAdmin = () => {
           <Input
             type="text"
             value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value);
-              fetchInterventions(e.target.value);
-            }}
+            onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Rechercher par patient, dispositif ou technicien..."
             className="pl-10"
           />
@@ -384,25 +330,38 @@ const InterventionManagementAdmin = () => {
         </Card>
       )}
 
-      {/* Modals */}
+      {/* Create Modal */}
       {showCreateModal && (
-        <InterventionForm
-          mode="create"
-          intervention={null}
-          onSubmit={handleCreateIntervention}
+        <Modal 
+          isOpen={showCreateModal}
           onClose={() => setShowCreateModal(false)}
-          patients={patients}
-        />
+          title="Nouvelle Intervention"
+          size="lg"
+        >
+          <InterventionForm
+            mode="create"
+            intervention={null}
+            onSubmit={handleCreateIntervention}
+            onClose={() => setShowCreateModal(false)}
+          />
+        </Modal>
       )}
 
+      {/* Edit Modal */}
       {editingIntervention && (
-        <InterventionForm
-          mode="edit"
-          intervention={editingIntervention}
-          onSubmit={handleEditIntervention}
+        <Modal 
+          isOpen={!!editingIntervention}
           onClose={() => setEditingIntervention(null)}
-          patients={patients}
-        />
+          title="Modifier l'Intervention"
+          size="lg"
+        >
+          <InterventionForm
+            mode="edit"
+            intervention={editingIntervention}
+            onSubmit={handleEditIntervention}
+            onClose={() => setEditingIntervention(null)}
+          />
+        </Modal>
       )}
 
       {viewingIntervention && (

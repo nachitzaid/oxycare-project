@@ -32,10 +32,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   useEffect(() => {
     const loadUserData = () => {
       try {
-        const token = localStorage.getItem("token")
+        const accessToken = localStorage.getItem("access_token")
         const storedUser = localStorage.getItem("user")
 
-        if (token && storedUser) {
+        if (accessToken && storedUser) {
           try {
             const userData = JSON.parse(storedUser)
             
@@ -45,10 +45,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             }
 
             setUser(userData)
-            axios.defaults.headers.common["Authorization"] = `Bearer ${token}`
+            axios.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`
           } catch (error) {
             console.error("Erreur lors du parsing des données utilisateur:", error)
-            localStorage.removeItem("token")
+            localStorage.removeItem("access_token")
+            localStorage.removeItem("refresh_token")
             localStorage.removeItem("user")
           }
         }
@@ -85,9 +86,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         mot_de_passe: password,
       })
 
-      const { utilisateur, access_token } = response.data
+      const { utilisateur, access_token, refresh_token } = response.data
 
-      if (!utilisateur || !access_token) {
+      if (!utilisateur || !access_token || !refresh_token) {
         throw new Error("Données d'authentification invalides")
       }
 
@@ -97,7 +98,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       }
 
       // Stockage sécurisé
-      localStorage.setItem("token", access_token)
+      localStorage.setItem("access_token", access_token)
+      localStorage.setItem("refresh_token", refresh_token)
       localStorage.setItem("user", JSON.stringify(utilisateur))
 
       setUser(utilisateur)
@@ -118,7 +120,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const logout = () => {
     try {
-      localStorage.removeItem("token")
+      localStorage.removeItem("access_token")
+      localStorage.removeItem("refresh_token")
       localStorage.removeItem("user")
       setUser(null)
       delete axios.defaults.headers.common["Authorization"]
@@ -129,7 +132,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }
 
   const isAuthenticated = (): boolean => {
-    if (!user || !localStorage.getItem("token")) return false
+    if (!user || !localStorage.getItem("access_token")) return false
     
     // Vérification supplémentaire des données utilisateur
     return !!user.id && !!user.nom_utilisateur && !!user.role

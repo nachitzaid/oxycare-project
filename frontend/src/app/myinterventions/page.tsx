@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
@@ -78,7 +78,7 @@ const MyInterventions = () => {
   const [viewMode, setViewMode] = useState<"calendar" | "list">("calendar");
   const [mounted, setMounted] = useState(false);
   
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
 
   // Vérifier que le composant est monté côté client
@@ -86,16 +86,10 @@ const MyInterventions = () => {
     setMounted(true);
   }, []);
 
-  // Generic API request function avec gestion d'erreur améliorée
-  const makeRequest = async (url: string, options: any = {}) => {
-    // Vérifier si on est côté client
-    if (typeof window === 'undefined') {
-      throw new Error('Cette fonction ne peut être utilisée que côté client');
-    }
-
-    const token = localStorage.getItem("token");
+  const makeRequest = useCallback(async (url: string, options: any = {}) => {
+    const token = localStorage.getItem("access_token");
     if (!token) {
-      throw new Error('Token d\'authentification manquant');
+      throw new Error("Non authentifié");
     }
 
     const config = {
@@ -109,38 +103,41 @@ const MyInterventions = () => {
     };
 
     try {
-      console.log(`Making request to: ${API_BASE_URL}${url}`);
       const response = await fetch(`${API_BASE_URL}${url}`, config);
-      
-      if (!response.ok) {
-        // Gérer les différents codes d'erreur
-        if (response.status === 401) {
-          throw new Error('Session expirée, veuillez vous reconnecter');
-        } else if (response.status === 403) {
-          throw new Error('Accès non autorisé');
-        } else if (response.status === 404) {
-          throw new Error('Ressource non trouvée');
-        } else if (response.status >= 500) {
-          throw new Error('Erreur serveur, veuillez réessayer plus tard');
-        }
-      }
-
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || `HTTP ${response.status}: ${response.statusText}`);
+      
+      if (response.status === 401) {
+        // Token expiré, essayer de rafraîchir
+        const refreshToken = localStorage.getItem("refresh_token");
+        if (refreshToken) {
+          const refreshResponse = await fetch(`${API_BASE_URL}/auth/rafraichir`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${refreshToken}`,
+            },
+          });
+          
+          if (refreshResponse.ok) {
+            const { access_token } = await refreshResponse.json();
+            localStorage.setItem("access_token", access_token);
+            // Réessayer la requête originale avec le nouveau token
+            return makeRequest(url, options);
+          }
+        }
+        throw new Error("Session expirée");
       }
 
+      if (!response.ok) {
+        throw new Error(data.message || `HTTP ${response.status}`);
+      }
       return data;
     } catch (error) {
       console.error(`Erreur requête ${url}:`, error);
       throw error;
     }
-  };
+  }, [API_BASE_URL]);
 
-  // Show success/error messages
-  const showMessage = (message: string, type: "success" | "error") => {
-    console.log(`${type.toUpperCase()}: ${message}`);
+  const showMessage = useCallback((message: string, type: "success" | "error") => {
     if (type === "success") {
       setSuccess(message);
       setTimeout(() => setSuccess(null), 5000);
@@ -148,12 +145,16 @@ const MyInterventions = () => {
       setError(message);
       setTimeout(() => setError(null), 5000);
     }
-  };
+  }, []);
 
   // Fetch technician's interventions avec gestion d'erreur améliorée
-  const fetchMyInterventions = async (search = "") => {
-    if (!user?.id) {
-      showMessage("Utilisateur non identifié", "error");
+  const fetchMyInterventions = useCallback(async (search = "") => {
+    if (!isAuthenticated()) {
+      setError("Vous devez être connecté pour voir vos interventions");
+      return;
+    }
+
+    if (!user?.id || loading) {
       return;
     }
 
@@ -167,10 +168,7 @@ const MyInterventions = () => {
         params.append("recherche", search.trim());
       }
       
-      console.log('Fetching interventions with params:', params.toString());
       const data = await makeRequest(`/interventions?${params.toString()}`);
-      
-      console.log('API Response:', data);
       
       if (data.success && data.data && Array.isArray(data.data.items)) {
         const cleanedInterventions = data.data.items.map((intervention: any) => ({
@@ -195,11 +193,7 @@ const MyInterventions = () => {
           technicien: intervention.technicien || null,
         }));
         
-        console.log('Cleaned interventions:', cleanedInterventions);
         setInterventions(cleanedInterventions);
-      } else if (data.success && (!data.data || !data.data.items)) {
-        // Cas où il n'y a pas d'interventions
-        setInterventions([]);
       } else {
         throw new Error(data.message || "Erreur lors du chargement de vos interventions");
       }
@@ -210,7 +204,7 @@ const MyInterventions = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id, loading, makeRequest, showMessage, isAuthenticated]);
 
   // Handle calendar event click
   const handleEventClick = (info: any) => {
@@ -318,11 +312,10 @@ const MyInterventions = () => {
 
   // Initial data fetch avec vérification de l'utilisateur
   useEffect(() => {
-    if (mounted && !authLoading && user?.id) {
-      console.log('User loaded, fetching interventions for user:', user);
+    if (mounted && !authLoading && isAuthenticated() && user?.id && !loading) {
       fetchMyInterventions();
     }
-  }, [user, authLoading, mounted]);
+  }, [mounted, authLoading, isAuthenticated, user?.id, loading, fetchMyInterventions]);
 
   // Ne pas rendre tant que le composant n'est pas monté côté client
   if (!mounted) {

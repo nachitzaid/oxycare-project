@@ -1,39 +1,55 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { useAuth } from "../contexts/AuthContext"
-import Navbar from "@/components/layout/Navbar"
-import Sidebar from "@/components/layout/Sidebar"
-import InterventionManagement from "@/components/interventions/InterventionManagement"
-import { useRouter } from "next/navigation"
-import Spinner from "@/components/common/Spinner"
+import { useEffect, useState } from "react";
+import { useAuth } from "../contexts/AuthContext";
+import Navbar from "@/components/layout/Navbar";
+import Sidebar from "@/components/layout/Sidebar";
+import MyInterventions from "../myinterventions/page";
+import InterventionManagementAdmin from "@/components/interventions/InterventionManagement";
+import { useRouter } from "next/navigation";
+import Spinner from "@/components/common/Spinner";
+import { AlertCircle } from "lucide-react";
 
 export default function InterventionsPage() {
-  const { user, isAuthenticated, loading } = useAuth()
-  const router = useRouter()
-  const [isClient, setIsClient] = useState(false)
+  const { user, isAuthenticated, isAdmin, isTechnician, loading } = useAuth();
+  const router = useRouter();
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
-    setIsClient(true)
+    setIsClient(true);
 
-    // Rediriger vers la page de connexion si l'utilisateur n'est pas authentifié
+    // Redirect to login if not authenticated
     if (!loading && !isAuthenticated() && isClient) {
-      router.push("/login?redirect=/interventions")
+      router.push("/login?redirect=/interventions");
     }
-  }, [isAuthenticated, loading, router, isClient])
+  }, [isAuthenticated, loading, router, isClient]);
 
-  // Afficher un spinner pendant le chargement ou si on n'est pas côté client
   if (loading || !isClient) {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <Spinner size="lg" />
       </div>
-    )
+    );
   }
 
-  // Si l'utilisateur n'est pas authentifié, ne rien afficher (la redirection se fera via useEffect)
   if (!isAuthenticated()) {
-    return null
+    return null; // Redirect handled by useEffect
+  }
+
+  if (!isAdmin() && !isTechnician()) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <AlertCircle className="w-12 h-12 mx-auto text-red-500 mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+            Accès non autorisé
+          </h3>
+          <p className="text-gray-500">
+            Votre rôle ne permet pas d'accéder à cette page.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -42,9 +58,9 @@ export default function InterventionsPage() {
       <div className="flex flex-col flex-1 overflow-hidden">
         <Navbar />
         <main className="flex-1 overflow-y-auto p-5">
-          <InterventionManagement />
+          {isAdmin() ? <InterventionManagementAdmin /> : <MyInterventions />}
         </main>
       </div>
     </div>
-  )
+  );
 }

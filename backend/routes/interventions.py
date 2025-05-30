@@ -1,420 +1,336 @@
 from flask import Blueprint, request, jsonify
+from flask_jwt_extended import get_jwt_identity, jwt_required, get_jwt
 from extensions.base_donnees import db
 from modeles.intervention import Intervention
 from modeles.patient import Patient
 from modeles.dispositif_medical import DispositifMedical
 from modeles.utilisateur import Utilisateur
-from datetime import datetime, date
-from sqlalchemy import or_, func
+from sqlalchemy import or_
+import logging
+import traceback
+from datetime import datetime
 
 interventions_bp = Blueprint('interventions', __name__)
 
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
 @interventions_bp.route('', methods=['GET'])
+@jwt_required()
 def lister_interventions():
     """Récupérer toutes les interventions avec pagination et recherche"""
     try:
-        page = request.args.get('page', 1, type=int)
-        per_page = min(request.args.get('per_page', 10, type=int), 100)
-        recherche = request.args.get('recherche', '', type=str)
+        # Récupérer l'ID de l'utilisateur et les claims du token
+        user_id = get_jwt_identity()
+        claims = get_jwt()
+        
+        if not user_id:
+            logger.error("No user identity found in JWT token")
+            return jsonify({
+                'success': False,
+                'message': 'Token invalide ou expiré'
+            }), 401
+
+        user_role = claims.get('role')
+        if not user_role:
+            logger.error(f"Invalid user data in JWT token: {claims}")
+            return jsonify({
+                'success': False,
+                'message': 'Données utilisateur invalides'
+            }), 401
+
+        logger.info(f"Processing request for user {user_id} with role {user_role}")
+
+        # Validate query parameters
+        try:
+            page = request.args.get('page', 1, type=int)
+            per_page = request.args.get('per_page', 10, type=int)
+            if page < 1 or per_page < 1 or per_page > 100:
+                raise ValueError("Page or per_page invalid")
+        except (ValueError, TypeError) as e:
+            logger.error(f"Invalid pagination parameters: {str(e)}, page={request.args.get('page')}, per_page={request.args.get('per_page')}")
+            return jsonify({
+                'success': False,
+                'message': 'Paramètres de pagination invalides',
+                'error': str(e)
+            }), 422
+
+        recherche = request.args.get('recherche', '', type=str).strip()
         technicien_id = request.args.get('technicien_id', type=int)
         statut = request.args.get('statut', type=str)
         type_intervention = request.args.get('type', type=str)
 
-        # Construction de la requête
-        query = Intervention.query
+        logger.debug(f"Query parameters: recherche={recherche}, technicien_id={technicien_id}, statut={statut}, type={type_intervention}")
 
-        # Filtrage par technicien
-        if technicien_id:
+        # Build query with eager loading
+        query = Intervention.query.options(
+            db.joinedload(Intervention.patient),
+            db.joinedload(Intervention.dispositif),
+            db.joinedload(Intervention.technicien)
+        )
+
+        # Restrict technicians to their own interventions
+        if user_role == 'technicien':
+            query = query.filter(Intervention.technicien_id == user_id)
+            logger.info(f"Filtering interventions for technician {user_id}")
+        elif user_role != 'admin':
+            logger.error(f"Unauthorized role: {user_role}")
+            return jsonify({
+                'success': False,
+                'message': 'Rôle non autorisé'
+            }), 403
+
+        # Admin can filter by technicien_id
+        if technicien_id and user_role == 'admin':
             query = query.filter(Intervention.technicien_id == technicien_id)
+            logger.info(f"Admin filtering by technician {technicien_id}")
 
-        # Filtrage par statut
+        # Filter by status
         if statut:
             query = query.filter(Intervention.statut == statut)
 
-        # Filtrage par type d'intervention
+        # Filter by intervention type
         if type_intervention:
             query = query.filter(Intervention.type_intervention == type_intervention)
 
-        # Recherche textuelle
+        # Text search
         if recherche:
-            query = query.join(Patient, Intervention.patient_id == Patient.id, isouter=True).join(
-                DispositifMedical, Intervention.dispositif_id == DispositifMedical.id, isouter=True
-            ).join(Utilisateur, Intervention.technicien_id == Utilisateur.id, isouter=True).filter(
-                or_(
-                    Patient.nom.ilike(f'%{recherche}%'),
-                    Patient.prenom.ilike(f'%{recherche}%'),
-                    DispositifMedical.designation.ilike(f'%{recherche}%'),
-                    DispositifMedical.reference.ilike(f'%{recherche}%'),
-                    Utilisateur.nom.ilike(f'%{recherche}%'),
-                    Utilisateur.prenom.ilike(f'%{recherche}%'),
+            try:
+                query = query.join(Patient, Intervention.patient_id == Patient.id, isouter=True).join(
+                    DispositifMedical, Intervention.dispositif_id == DispositifMedical.id, isouter=True
+                ).join(Utilisateur, Intervention.technicien_id == Utilisateur.id, isouter=True).filter(
+                    or_(
+                        Patient.nom.ilike(f'%{recherche}%'),
+                        Patient.prenom.ilike(f'%{recherche}%'),
+                        DispositifMedical.designation.ilike(f'%{recherche}%'),
+                        DispositifMedical.reference.ilike(f'%{recherche}%'),
+                        Utilisateur.nom.ilike(f'%{recherche}%'),
+                        Utilisateur.prenom.ilike(f'%{recherche}%'),
+                    )
                 )
-            )
+                logger.info(f"Search query applied: {recherche}")
+            except Exception as e:
+                logger.error(f"Error in search query: {str(e)}\n{traceback.format_exc()}")
+                return jsonify({
+                    'success': False,
+                    'message': 'Erreur dans la recherche',
+                    'error': str(e)
+                }), 400
 
         # Pagination
-        interventions_pagines = query.paginate(page=page, per_page=per_page, error_out=False)
+        try:
+            interventions_paginated = query.paginate(page=page, per_page=per_page, error_out=False)
+            logger.info(f"Found {interventions_paginated.total} interventions")
+        except Exception as e:
+            logger.error(f"Error in pagination: {str(e)}\n{traceback.format_exc()}")
+            return jsonify({
+                'success': False,
+                'message': 'Erreur lors de la pagination',
+                'error': str(e)
+            }), 500
 
-        # Sérialisation des données
+        # Serialize data
         interventions_data = []
-        for intervention in interventions_pagines.items:
-            data = intervention.to_dict()
-            # Ajouter les informations du patient
-            if intervention.patient_id:
-                patient = Patient.query.get(intervention.patient_id)
-                if patient:
-                    data['patient'] = {
-                        'id': patient.id,
-                        'code_patient': patient.code_patient,
-                        'nom': patient.nom,
-                        'prenom': patient.prenom,
-                        'telephone': patient.telephone,
-                        'email': patient.email,
-                    }
-            # Ajouter les informations du dispositif
-            if intervention.dispositif_id:
-                dispositif = DispositifMedical.query.get(intervention.dispositif_id)
-                if dispositif:
-                    data['dispositif'] = {
-                        'id': dispositif.id,
-                        'designation': dispositif.designation,
-                        'reference': dispositif.reference,
-                        'numero_serie': dispositif.numero_serie,
-                    }
-            # Ajouter les informations du technicien
-            if intervention.technicien_id:
-                technicien = Utilisateur.query.get(intervention.technicien_id)
-                if technicien:
-                    data['technicien'] = {
-                        'id': technicien.id,
-                        'nom': technicien.nom,
-                        'prenom': technicien.prenom,
-                        'email': technicien.email,
-                    }
-            interventions_data.append(data)
+        for intervention in interventions_paginated.items:
+            try:
+                data = intervention.to_dict()
+                
+                # Handle patient data
+                if intervention.patient:
+                    try:
+                        data['patient'] = {
+                            'id': intervention.patient.id,
+                            'code_patient': intervention.patient.code_patient,
+                            'nom': intervention.patient.nom,
+                            'prenom': intervention.patient.prenom,
+                            'telephone': intervention.patient.telephone,
+                            'email': intervention.patient.email,
+                        }
+                        logger.debug(f"Patient data added for intervention {intervention.id}")
+                    except Exception as patient_error:
+                        logger.error(f"Error processing patient data for intervention {intervention.id}: {str(patient_error)}\n{traceback.format_exc()}")
+                        data['patient'] = None
 
-        return jsonify({
+                # Handle device data
+                if intervention.dispositif:
+                    try:
+                        data['dispositif'] = {
+                            'id': intervention.dispositif.id,
+                            'designation': intervention.dispositif.designation,
+                            'reference': intervention.dispositif.reference,
+                            'numero_serie': intervention.dispositif.numero_serie,
+                        }
+                        logger.debug(f"Device data added for intervention {intervention.id}")
+                    except Exception as device_error:
+                        logger.error(f"Error processing device data for intervention {intervention.id}: {str(device_error)}\n{traceback.format_exc()}")
+                        data['dispositif'] = None
+
+                # Handle technician data
+                if intervention.technicien:
+                    try:
+                        data['technicien'] = {
+                            'id': intervention.technicien.id,
+                            'nom': intervention.technicien.nom,
+                            'prenom': intervention.technicien.prenom,
+                            'email': intervention.technicien.email,
+                        }
+                        logger.debug(f"Technician data added for intervention {intervention.id}")
+                    except Exception as tech_error:
+                        logger.error(f"Error processing technician data for intervention {intervention.id}: {str(tech_error)}\n{traceback.format_exc()}")
+                        data['technicien'] = None
+
+                interventions_data.append(data)
+                logger.debug(f"Successfully processed intervention {intervention.id}")
+            except Exception as e:
+                logger.error(f"Error serializing intervention {intervention.id}: {str(e)}\n{traceback.format_exc()}")
+                continue
+
+        response_data = {
             'success': True,
             'data': {
                 'items': interventions_data,
-                'page_courante': interventions_pagines.page,
-                'pages_totales': interventions_pagines.pages,
-                'total': interventions_pagines.total,
-                'elements_par_page': interventions_pagines.per_page,
+                'page_courante': interventions_paginated.page,
+                'pages_totales': interventions_paginated.pages,
+                'total': interventions_paginated.total,
+                'elements_par_page': interventions_paginated.per_page,
             },
             'message': f'{len(interventions_data)} interventions trouvées',
-        }), 200
+        }
+
+        logger.info(f"Successfully prepared response with {len(interventions_data)} interventions")
+        return jsonify(response_data), 200
 
     except Exception as e:
-        print(f"Erreur lister_interventions: {str(e)}")
+        logger.error(f"Error in lister_interventions: {str(e)}\n{traceback.format_exc()}")
+        db.session.rollback()
         return jsonify({
             'success': False,
             'error': str(e),
-            'message': 'Erreur lors de la récupération des interventions',
+            'message': 'Erreur lors de la récupération des interventions'
         }), 500
 
 @interventions_bp.route('', methods=['POST'])
+@jwt_required()
 def creer_intervention():
     """Créer une nouvelle intervention"""
     try:
+        # Récupérer l'ID de l'utilisateur et les claims du token
+        user_id = get_jwt_identity()
+        claims = get_jwt()
+        
+        if not user_id:
+            logger.error("No user identity found in JWT token")
+            return jsonify({
+                'success': False,
+                'message': 'Token invalide ou expiré'
+            }), 401
+
+        user_role = claims.get('role')
+        if not user_role:
+            logger.error(f"Invalid user data in JWT token: {claims}")
+            return jsonify({
+                'success': False,
+                'message': 'Données utilisateur invalides'
+            }), 401
+
+        # Récupérer les données de la requête
         data = request.get_json()
-
-        # Validation des champs requis
-        champs_requis = ['patient_id', 'dispositif_id', 'technicien_id', 'type_intervention']
-        for champ in champs_requis:
-            if not data.get(champ):
-                return jsonify({
-                    'success': False,
-                    'message': f'Le champ {champ} est requis',
-                }), 400
-
-        # Vérifier que le patient existe
-        patient = Patient.query.get(data['patient_id'])
-        if not patient:
+        if not data:
             return jsonify({
                 'success': False,
-                'message': 'Patient non trouvé',
-            }), 404
+                'message': 'Données manquantes'
+            }), 400
 
-        # Vérifier que le dispositif existe
-        dispositif = DispositifMedical.query.get(data['dispositif_id'])
-        if not dispositif:
-            return jsonify({
-                'success': False,
-                'message': 'Dispositif non trouvé',
-            }), 404
-
-        # Vérifier que le technicien existe
-        technicien = Utilisateur.query.get(data['technicien_id'])
-        if not technicien:
-            return jsonify({
-                'success': False,
-                'message': 'Technicien non trouvé',
-            }), 404
-
-        # Traitement des dates
-        date_planifiee = None
-        if data.get('date_planifiee'):
-            try:
-                date_planifiee = datetime.strptime(data['date_planifiee'], '%Y-%m-%dT%H:%M:%S')
-            except ValueError:
+        # Valider les données requises
+        required_fields = ['patient_id', 'dispositif_id', 'date_intervention', 'type_intervention']
+        for field in required_fields:
+            if field not in data:
                 return jsonify({
                     'success': False,
-                    'message': 'Format de date planifiée invalide (YYYY-MM-DDTHH:MM:SS attendu)',
+                    'message': f'Champ requis manquant: {field}'
                 }), 400
 
-        date_reelle = None
-        if data.get('date_reelle'):
-            try:
-                date_reelle = datetime.strptime(data['date_reelle'], '%Y-%m-%dT%H:%M:%S')
-            except ValueError:
-                return jsonify({
-                    'success': False,
-                    'message': 'Format de date réelle invalide (YYYY-MM-DDTHH:MM:SS attendu)',
-                }), 400
+        # Convertir la date ISO en datetime MySQL
+        try:
+            # Enlever le 'Z' et convertir en datetime
+            date_str = data['date_intervention'].replace('Z', '')
+            date_intervention = datetime.fromisoformat(date_str)
+        except ValueError as e:
+            logger.error(f"Format de date invalide: {data['date_intervention']}")
+            return jsonify({
+                'success': False,
+                'message': 'Format de date invalide'
+            }), 400
 
         # Créer la nouvelle intervention
-        nouvelle_intervention = Intervention(
-            patient_id=data['patient_id'],
-            dispositif_id=data['dispositif_id'],
-            technicien_id=data['technicien_id'],
-            type_intervention=data['type_intervention'],
-            planifiee=data.get('planifiee', True),
-            date_planifiee=date_planifiee,
-            date_reelle=date_reelle or datetime.utcnow(),
-            temps_prevu=data.get('temps_prevu'),
-            temps_reel=data.get('temps_reel'),
-            actions_effectuees=data.get('actions_effectuees'),
-            satisfaction_technicien=data.get('satisfaction_technicien'),
-            signature_patient=data.get('signature_patient', False),
-            signature_responsable=data.get('signature_responsable', False),
-            commentaire=data.get('commentaire'),
-        )
+        try:
+            nouvelle_intervention = Intervention(
+                patient_id=data['patient_id'],
+                dispositif_id=data['dispositif_id'],
+                technicien_id=user_id if user_role == 'technicien' else data.get('technicien_id'),
+                date_planifiee=date_intervention,
+                type_intervention=data['type_intervention'],
+                planifiee=True,
+                commentaire=data.get('description', '')
+            )
 
-        db.session.add(nouvelle_intervention)
-        db.session.commit()
+            db.session.add(nouvelle_intervention)
+            db.session.commit()
 
-        # Récupérer l'intervention créée avec les relations
-        intervention_data = nouvelle_intervention.to_dict()
-        intervention_data['patient'] = {
-            'id': patient.id,
-            'code_patient': patient.code_patient,
-            'nom': patient.nom,
-            'prenom': patient.prenom,
-            'telephone': patient.telephone,
-            'email': patient.email,
-        }
-        intervention_data['dispositif'] = {
-            'id': dispositif.id,
-            'designation': dispositif.designation,
-            'reference': dispositif.reference,
-            'numero_serie': dispositif.numero_serie,
-        }
-        intervention_data['technicien'] = {
-            'id': technicien.id,
-            'nom': technicien.nom,
-            'prenom': technicien.prenom,
-            'email': technicien.email,
-        }
+            # Charger les relations pour la réponse
+            db.session.refresh(nouvelle_intervention)
+            intervention_data = nouvelle_intervention.to_dict()
 
-        return jsonify({
-            'success': True,
-            'data': intervention_data,
-            'message': f'Intervention {nouvelle_intervention.type_intervention} créée avec succès',
-        }), 201
+            # Ajouter les données du patient
+            if nouvelle_intervention.patient:
+                intervention_data['patient'] = {
+                    'id': nouvelle_intervention.patient.id,
+                    'code_patient': nouvelle_intervention.patient.code_patient,
+                    'nom': nouvelle_intervention.patient.nom,
+                    'prenom': nouvelle_intervention.patient.prenom,
+                    'telephone': nouvelle_intervention.patient.telephone,
+                    'email': nouvelle_intervention.patient.email,
+                }
+
+            # Ajouter les données du dispositif
+            if nouvelle_intervention.dispositif:
+                intervention_data['dispositif'] = {
+                    'id': nouvelle_intervention.dispositif.id,
+                    'designation': nouvelle_intervention.dispositif.designation,
+                    'reference': nouvelle_intervention.dispositif.reference,
+                    'numero_serie': nouvelle_intervention.dispositif.numero_serie,
+                }
+
+            # Ajouter les données du technicien
+            if nouvelle_intervention.technicien:
+                intervention_data['technicien'] = {
+                    'id': nouvelle_intervention.technicien.id,
+                    'nom': nouvelle_intervention.technicien.nom,
+                    'prenom': nouvelle_intervention.technicien.prenom,
+                    'email': nouvelle_intervention.technicien.email,
+                }
+
+            logger.info(f"Intervention créée avec succès: {nouvelle_intervention.id}")
+            return jsonify({
+                'success': True,
+                'message': 'Intervention créée avec succès',
+                'data': intervention_data
+            }), 201
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erreur lors de la création de l'intervention: {str(e)}\n{traceback.format_exc()}")
+            return jsonify({
+                'success': False,
+                'message': 'Erreur lors de la création de l\'intervention',
+                'error': str(e)
+            }), 500
 
     except Exception as e:
-        print(f"Erreur creer_intervention: {str(e)}")
-        db.session.rollback()
+        logger.error(f"Erreur non gérée: {str(e)}\n{traceback.format_exc()}")
         return jsonify({
             'success': False,
-            'error': str(e),
             'message': 'Erreur lors de la création de l\'intervention',
-        }), 500
-
-@interventions_bp.route('/<int:intervention_id>', methods=['GET'])
-def obtenir_intervention(intervention_id):
-    """Récupérer une intervention spécifique"""
-    try:
-        intervention = Intervention.query.get(intervention_id)
-        if not intervention:
-            return jsonify({
-                'success': False,
-                'message': 'Intervention non trouvée',
-            }), 404
-
-        intervention_data = intervention.to_dict()
-
-        # Ajouter les informations du patient
-        if intervention.patient_id:
-            patient = Patient.query.get(intervention.patient_id)
-            if patient:
-                intervention_data['patient'] = {
-                    'id': patient.id,
-                    'code_patient': patient.code_patient,
-                    'nom': patient.nom,
-                    'prenom': patient.prenom,
-                    'telephone': patient.telephone,
-                    'email': patient.email,
-                }
-
-        # Ajouter les informations du dispositif
-        if intervention.dispositif_id:
-            dispositif = DispositifMedical.query.get(intervention.dispositif_id)
-            if dispositif:
-                intervention_data['dispositif'] = {
-                    'id': dispositif.id,
-                    'designation': dispositif.designation,
-                    'reference': dispositif.reference,
-                    'numero_serie': dispositif.numero_serie,
-                }
-
-        # Ajouter les informations du technicien
-        if intervention.technicien_id:
-            technicien = Utilisateur.query.get(intervention.technicien_id)
-            if technicien:
-                intervention_data['technicien'] = {
-                    'id': technicien.id,
-                    'nom': technicien.nom,
-                    'prenom': technicien.prenom,
-                    'email': technicien.email,
-                }
-
-        return jsonify({
-            'success': True,
-            'data': intervention_data,
-            'message': 'Intervention récupérée avec succès',
-        }), 200
-
-    except Exception as e:
-        print(f"Erreur obtenir_intervention: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': str(e),
-            'message': 'Erreur lors de la récupération de l\'intervention',
-        }), 500
-
-@interventions_bp.route('/<int:intervention_id>', methods=['PUT'])
-def modifier_intervention(intervention_id):
-    """Modifier une intervention existante"""
-    try:
-        intervention = Intervention.query.get(intervention_id)
-        if not intervention:
-            return jsonify({
-                'success': False,
-                'message': 'Intervention non trouvée',
-            }), 404
-
-        data = request.get_json()
-
-        # Mise à jour des champs
-        champs_modifiables = [
-            'patient_id', 'dispositif_id', 'technicien_id', 'type_intervention',
-            'planifiee', 'temps_prevu', 'temps_reel', 'actions_effectuees',
-            'satisfaction_technicien', 'signature_patient', 'signature_responsable', 'commentaire',
-        ]
-
-        for champ in champs_modifiables:
-            if champ in data:
-                setattr(intervention, champ, data[champ])
-
-        # Traitement des dates
-        if 'date_planifiee' in data:
-            if data['date_planifiee']:
-                try:
-                    intervention.date_planifiee = datetime.strptime(data['date_planifiee'], '%Y-%m-%dT%H:%M:%S')
-                except ValueError:
-                    return jsonify({
-                        'success': False,
-                        'message': 'Format de date planifiée invalide',
-                    }), 400
-            else:
-                intervention.date_planifiee = None
-
-        if 'date_reelle' in data:
-            if data['date_reelle']:
-                try:
-                    intervention.date_reelle = datetime.strptime(data['date_reelle'], '%Y-%m-%dT%H:%M:%S')
-                except ValueError:
-                    return jsonify({
-                        'success': False,
-                        'message': 'Format de date réelle invalide',
-                    }), 400
-            else:
-                intervention.date_reelle = None
-
-        db.session.commit()
-
-        # Retourner l'intervention mise à jour
-        intervention_data = intervention.to_dict()
-        if intervention.patient_id:
-            patient = Patient.query.get(intervention.patient_id)
-            if patient:
-                intervention_data['patient'] = {
-                    'id': patient.id,
-                    'code_patient': patient.code_patient,
-                    'nom': patient.nom,
-                    'prenom': patient.prenom,
-                    'telephone': patient.telephone,
-                    'email': patient.email,
-                }
-        if intervention.dispositif_id:
-            dispositif = DispositifMedical.query.get(intervention.dispositif_id)
-            if dispositif:
-                intervention_data['dispositif'] = {
-                    'id': dispositif.id,
-                    'designation': dispositif.designation,
-                    'reference': dispositif.reference,
-                    'numero_serie': dispositif.numero_serie,
-                }
-        if intervention.technicien_id:
-            technicien = Utilisateur.query.get(intervention.technicien_id)
-            if technicien:
-                intervention_data['technicien'] = {
-                    'id': technicien.id,
-                    'nom': technicien.nom,
-                    'prenom': technicien.prenom,
-                    'email': technicien.email,
-                }
-
-        return jsonify({
-            'success': True,
-            'data': intervention_data,
-            'message': 'Intervention mise à jour avec succès',
-        }), 200
-
-    except Exception as e:
-        print(f"Erreur modifier_intervention: {str(e)}")
-        db.session.rollback()
-        return jsonify({
-            'success': False,
-            'error': str(e),
-            'message': 'Erreur lors de la modification de l\'intervention',
-        }), 500
-
-@interventions_bp.route('/<int:intervention_id>', methods=['DELETE'])
-def supprimer_intervention(intervention_id):
-    """Supprimer une intervention"""
-    try:
-        intervention = Intervention.query.get(intervention_id)
-        if not intervention:
-            return jsonify({
-                'success': False,
-                'message': 'Intervention non trouvée',
-            }), 404
-
-        intervention_info = f"{intervention.type_intervention} ({intervention.id})"
-        db.session.delete(intervention)
-        db.session.commit()
-
-        return jsonify({
-            'success': True,
-            'message': f'Intervention {intervention_info} supprimée avec succès',
-        }), 200
-
-    except Exception as e:
-        print(f"Erreur supprimer_intervention: {str(e)}")
-        db.session.rollback()
-        return jsonify({
-            'success': False,
-            'error': str(e),
-            'message': 'Erreur lors de la suppression de l\'intervention',
+            'error': str(e)
         }), 500

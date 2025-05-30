@@ -234,10 +234,24 @@ const InterventionForm: React.FC<InterventionFormProps> = ({ mode, intervention,
     setError(null);
 
     try {
+      // Validation des champs requis
+      if (!formData.patient_id) {
+        throw new Error("Le patient est requis");
+      }
+      if (!formData.dispositif_id) {
+        throw new Error("Le dispositif est requis");
+      }
+      if (!formData.date_planifiee) {
+        throw new Error("La date d'intervention est requise");
+      }
+      if (!formData.type_intervention) {
+        throw new Error("Le type d'intervention est requis");
+      }
+
       const submitData = {
         ...formData,
-        patient_id: formData.patient_id ? Number(formData.patient_id) : undefined,
-        dispositif_id: formData.dispositif_id ? Number(formData.dispositif_id) : undefined,
+        patient_id: Number(formData.patient_id),
+        dispositif_id: Number(formData.dispositif_id),
         technicien_id: formData.technicien_id ? Number(formData.technicien_id) : undefined,
         temps_prevu: formData.temps_prevu ? Number(formData.temps_prevu) : null,
         temps_reel: formData.temps_reel ? Number(formData.temps_reel) : null,
@@ -245,28 +259,19 @@ const InterventionForm: React.FC<InterventionFormProps> = ({ mode, intervention,
           ? Number(formData.satisfaction_technicien)
           : null,
         date_planifiee: formData.date_planifiee
-          ? new Date(formData.date_planifiee).toISOString().slice(0, 19)
+          ? new Date(formData.date_planifiee).toISOString()
           : null,
         date_reelle: formData.date_reelle
-          ? new Date(formData.date_reelle).toISOString().slice(0, 19)
+          ? new Date(formData.date_reelle).toISOString()
           : null,
       };
 
-      Object.keys(submitData).forEach((key) => {
-        if (
-          submitData[key] === "" &&
-          !["actions_effectuees", "commentaire", "date_planifiee", "date_reelle"].includes(key)
-        ) {
-          delete submitData[key];
-        }
-      });
-
+      console.log("Données soumises:", submitData);
       await onSubmit(submitData);
-      onClose();
     } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Erreur lors de la soumission du formulaire";
+      const errorMessage = error instanceof Error ? error.message : "Erreur lors de la soumission";
       setError(errorMessage);
+      console.error("Erreur lors de la soumission:", error);
     } finally {
       setLoading(false);
     }

@@ -9,9 +9,17 @@ class Config:
     """Configuration de base"""
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'oxycare_secret_key_dev'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    
+    # Configuration JWT
     JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY') or 'oxycare_jwt_secret_key_dev'
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=1)
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=30)
+    JWT_TOKEN_LOCATION = ['headers']
+    JWT_HEADER_NAME = 'Authorization'
+    JWT_HEADER_TYPE = 'Bearer'
+    JWT_ERROR_MESSAGE_KEY = 'message'
+    JWT_BLACKLIST_ENABLED = True
+    JWT_BLACKLIST_TOKEN_CHECKS = ['access', 'refresh']
     
 class ConfigDeveloppement(Config):
     """Configuration de développement"""

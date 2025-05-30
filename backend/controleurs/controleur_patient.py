@@ -3,6 +3,8 @@ from flask import request
 from services.service_patient import ServicePatient
 from schemas.schema_patient import SchemaPatient
 import logging
+import traceback
+from extensions.base_donnees import db
 
 # Configuration du logging pour debug
 logging.basicConfig(level=logging.DEBUG)
@@ -36,8 +38,13 @@ class ControleurPatient:
             
             # Appel du service
             logger.info("Appel du service patient...")
-            resultat = self.service_patient.obtenir_tous_patients(page, par_page, recherche)
-            logger.info(f"Résultat du service reçu: {type(resultat)}")
+            try:
+                resultat = self.service_patient.obtenir_tous_patients(page, par_page, recherche)
+                logger.info(f"Résultat du service reçu: {type(resultat)}")
+            except Exception as service_error:
+                logger.error(f"Erreur dans le service patient: {str(service_error)}\n{traceback.format_exc()}")
+                db.session.rollback()
+                raise
             
             # Vérification de la structure du résultat
             if not isinstance(resultat, dict):
@@ -56,14 +63,14 @@ class ControleurPatient:
                 donnees_serialisees = self.schema_patients.dump(elements)
                 logger.info(f"Sérialisation réussie: {len(donnees_serialisees)} éléments")
             except Exception as e:
-                logger.error(f"Erreur de sérialisation: {str(e)}")
+                logger.error(f"Erreur de sérialisation: {str(e)}\n{traceback.format_exc()}")
                 # En cas d'erreur de sérialisation, essayer élément par élément
                 donnees_serialisees = []
                 for i, element in enumerate(elements):
                     try:
                         donnees_serialisees.append(self.schema_patient.dump(element))
                     except Exception as elem_error:
-                        logger.error(f"Erreur sur l'élément {i}: {str(elem_error)}")
+                        logger.error(f"Erreur sur l'élément {i}: {str(elem_error)}\n{traceback.format_exc()}")
                         continue
             
             response_data = {
@@ -83,7 +90,7 @@ class ControleurPatient:
             return response_data, 200
             
         except ValueError as ve:
-            logger.error(f"Erreur de validation dans obtenir_patients: {str(ve)}")
+            logger.error(f"Erreur de validation dans obtenir_patients: {str(ve)}\n{traceback.format_exc()}")
             return {
                 'success': False,
                 'message': f'Paramètres invalides: {str(ve)}',
@@ -98,8 +105,8 @@ class ControleurPatient:
             }, 422
             
         except Exception as e:
-            logger.error(f"Erreur générale dans obtenir_patients: {str(e)}")
-            logger.exception("Détails de l'erreur:")
+            logger.error(f"Erreur générale dans obtenir_patients: {str(e)}\n{traceback.format_exc()}")
+            db.session.rollback()
             return {
                 'success': False,
                 'message': f'Erreur lors de la récupération des patients: {str(e)}',
