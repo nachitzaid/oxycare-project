@@ -198,16 +198,14 @@ def lister_interventions():
             'message': f'{len(interventions_data)} interventions trouvées',
         }
 
-        logger.info(f"Successfully prepared response with {len(interventions_data)} interventions")
         return jsonify(response_data), 200
 
     except Exception as e:
-        logger.error(f"Error in lister_interventions: {str(e)}\n{traceback.format_exc()}")
-        db.session.rollback()
+        logger.error(f"Unexpected error in lister_interventions: {str(e)}\n{traceback.format_exc()}")
         return jsonify({
             'success': False,
-            'error': str(e),
-            'message': 'Erreur lors de la récupération des interventions'
+            'message': 'Erreur serveur inattendue',
+            'error': str(e)
         }), 500
 
 @interventions_bp.route('', methods=['POST'])
@@ -332,5 +330,150 @@ def creer_intervention():
         return jsonify({
             'success': False,
             'message': 'Erreur lors de la création de l\'intervention',
+            'error': str(e)
+        }), 500
+
+@interventions_bp.route('/<int:intervention_id>', methods=['PUT'])
+@jwt_required()
+def modifier_intervention(intervention_id):
+    """Modifier une intervention existante"""
+    try:
+        # Récupérer l'ID de l'utilisateur et les claims du token
+        user_id = get_jwt_identity()
+        claims = get_jwt()
+        
+        if not user_id:
+            logger.error("No user identity found in JWT token")
+            return jsonify({
+                'success': False,
+                'message': 'Token invalide ou expiré'
+            }), 401
+
+        user_role = claims.get('role')
+        if not user_role:
+            logger.error(f"Invalid user data in JWT token: {claims}")
+            return jsonify({
+                'success': False,
+                'message': 'Données utilisateur invalides'
+            }), 401
+
+        # Récupérer l'intervention
+        intervention = Intervention.query.get(intervention_id)
+        if not intervention:
+            return jsonify({
+                'success': False,
+                'message': 'Intervention non trouvée'
+            }), 404
+
+        # Vérifier les permissions
+        if user_role == 'technicien' and intervention.technicien_id != user_id:
+            return jsonify({
+                'success': False,
+                'message': 'Vous n\'êtes pas autorisé à modifier cette intervention'
+            }), 403
+
+        # Récupérer les données de la requête
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'message': 'Données manquantes'
+            }), 400
+
+        # Mettre à jour les champs modifiables
+        if 'date_intervention' in data:
+            try:
+                # Enlever le 'Z' et convertir en datetime
+                date_str = data['date_intervention'].replace('Z', '')
+                intervention.date_planifiee = datetime.fromisoformat(date_str)
+            except ValueError as e:
+                logger.error(f"Format de date invalide: {data['date_intervention']}")
+                return jsonify({
+                    'success': False,
+                    'message': 'Format de date invalide'
+                }), 400
+
+        if 'type_intervention' in data:
+            intervention.type_intervention = data['type_intervention']
+
+        if 'description' in data:
+            intervention.commentaire = data['description']
+
+        if 'temps_prevu' in data:
+            intervention.temps_prevu = data['temps_prevu']
+
+        if 'temps_reel' in data:
+            intervention.temps_reel = data['temps_reel']
+
+        if 'actions_effectuees' in data:
+            intervention.actions_effectuees = data['actions_effectuees']
+
+        if 'satisfaction_technicien' in data:
+            intervention.satisfaction_technicien = data['satisfaction_technicien']
+
+        if 'signature_patient' in data:
+            intervention.signature_patient = data['signature_patient']
+
+        if 'signature_responsable' in data:
+            intervention.signature_responsable = data['signature_responsable']
+
+        # Mettre à jour la base de données
+        try:
+            db.session.commit()
+            
+            # Charger les relations pour la réponse
+            db.session.refresh(intervention)
+            intervention_data = intervention.to_dict()
+
+            # Ajouter les données du patient
+            if intervention.patient:
+                intervention_data['patient'] = {
+                    'id': intervention.patient.id,
+                    'code_patient': intervention.patient.code_patient,
+                    'nom': intervention.patient.nom,
+                    'prenom': intervention.patient.prenom,
+                    'telephone': intervention.patient.telephone,
+                    'email': intervention.patient.email,
+                }
+
+            # Ajouter les données du dispositif
+            if intervention.dispositif:
+                intervention_data['dispositif'] = {
+                    'id': intervention.dispositif.id,
+                    'designation': intervention.dispositif.designation,
+                    'reference': intervention.dispositif.reference,
+                    'numero_serie': intervention.dispositif.numero_serie,
+                }
+
+            # Ajouter les données du technicien
+            if intervention.technicien:
+                intervention_data['technicien'] = {
+                    'id': intervention.technicien.id,
+                    'nom': intervention.technicien.nom,
+                    'prenom': intervention.technicien.prenom,
+                    'email': intervention.technicien.email,
+                }
+
+            logger.info(f"Intervention {intervention_id} modifiée avec succès")
+            return jsonify({
+                'success': True,
+                'message': 'Intervention modifiée avec succès',
+                'data': intervention_data
+            }), 200
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erreur lors de la modification de l'intervention: {str(e)}\n{traceback.format_exc()}")
+            return jsonify({
+                'success': False,
+                'message': 'Erreur lors de la modification de l\'intervention',
+                'error': str(e)
+            }), 500
+
+    except Exception as e:
+        logger.error(f"Erreur non gérée: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({
+            'success': False,
+            'message': 'Erreur lors de la modification de l\'intervention',
             'error': str(e)
         }), 500

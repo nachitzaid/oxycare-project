@@ -75,9 +75,10 @@ interface Intervention {
 interface InterventionDetailsProps {
   intervention: Intervention | null
   onClose: () => void
+  onEdit?: (intervention: Intervention) => void
 }
 
-const InterventionDetails: React.FC<InterventionDetailsProps> = ({ intervention, onClose }) => {
+const InterventionDetails: React.FC<InterventionDetailsProps> = ({ intervention, onClose, onEdit }) => {
   if (!intervention) return null
 
   const formatDate = (dateString: string | null) => {
@@ -184,7 +185,20 @@ const InterventionDetails: React.FC<InterventionDetailsProps> = ({ intervention,
               )}
             </p>
           </div>
-          <div className="mt-2 md:mt-0">{getStatusBadge()}</div>
+          <div className="flex items-center gap-2 mt-2 md:mt-0">
+            {getStatusBadge()}
+            {onEdit && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onEdit(intervention)}
+                className="flex items-center gap-1"
+              >
+                <Tool className="h-4 w-4" />
+                Modifier
+              </Button>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

@@ -4,12 +4,12 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import Navbar from "@/components/layout/Navbar";
 import Sidebar from "@/components/layout/Sidebar";
-import InterventionManagementTechnician from "@/components/interventions/InterventionManagementTechnician";
+import ReminderManagement from "@/components/reminders/ReminderManagement";
 import { useRouter } from "next/navigation";
 import Spinner from "@/components/common/Spinner";
 import { AlertCircle } from "lucide-react";
 
-export default function MyInterventionsPage() {
+export default function RemindersPage() {
   const { user, isAuthenticated, isTechnician, loading } = useAuth();
   const router = useRouter();
   const [isClient, setIsClient] = useState(false);
@@ -19,7 +19,7 @@ export default function MyInterventionsPage() {
 
     // Redirect to login if not authenticated
     if (!loading && !isAuthenticated() && isClient) {
-      router.push("/login?redirect=/myinterventions");
+      router.push("/login?redirect=/reminders");
     }
   }, [isAuthenticated, loading, router, isClient]);
 
@@ -57,9 +57,9 @@ export default function MyInterventionsPage() {
       <div className="flex flex-col flex-1 overflow-hidden">
         <Navbar />
         <main className="flex-1 overflow-y-auto p-5">
-          <InterventionManagementTechnician />
+          <ReminderManagement />
         </main>
       </div>
     </div>
   );
-}
+} 

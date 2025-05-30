@@ -330,31 +330,19 @@ const InterventionManagementAdmin = () => {
         </Card>
       )}
 
-      {/* Create Modal */}
+      {/* Modals */}
       {showCreateModal && (
-        <Modal 
-          isOpen={showCreateModal}
-          onClose={() => setShowCreateModal(false)}
-          title="Nouvelle Intervention"
-          size="lg"
-        >
+        <Modal isOpen={true} onClose={() => setShowCreateModal(false)} title="Nouvelle Intervention" size="lg">
           <InterventionForm
             mode="create"
-            intervention={null}
             onSubmit={handleCreateIntervention}
             onClose={() => setShowCreateModal(false)}
           />
         </Modal>
       )}
 
-      {/* Edit Modal */}
       {editingIntervention && (
-        <Modal 
-          isOpen={!!editingIntervention}
-          onClose={() => setEditingIntervention(null)}
-          title="Modifier l'Intervention"
-          size="lg"
-        >
+        <Modal isOpen={true} onClose={() => setEditingIntervention(null)} title="Modifier l'intervention" size="lg">
           <InterventionForm
             mode="edit"
             intervention={editingIntervention}
@@ -368,6 +356,10 @@ const InterventionManagementAdmin = () => {
         <InterventionDetails
           intervention={viewingIntervention}
           onClose={() => setViewingIntervention(null)}
+          onEdit={(intervention) => {
+            setViewingIntervention(null);
+            setEditingIntervention(intervention);
+          }}
         />
       )}
 
