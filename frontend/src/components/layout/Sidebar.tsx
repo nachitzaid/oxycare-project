@@ -36,10 +36,16 @@ const Sidebar = () => {
   // Navigation selon les rôles
   const navigation: NavigationItem[] = [
     {
-      name: isTechnician() ? "Rappels" : "Tableau de bord",
-      href: isTechnician() ? "/reminders" : "/dashboard",
-      icon: isTechnician() ? <Bell className="h-5 w-5" /> : <Home className="h-5 w-5" />,
+      name: "Tableau de bord",
+      href: "/dashboard",
+      icon: <Home className="h-5 w-5" />,
       role: "all",
+    },
+    {
+      name: "Rappels",
+      href: "/reminders",
+      icon: <Bell className="h-5 w-5" />,
+      role: "technicien",
     },
     {
       name: "Patients",
@@ -61,7 +67,7 @@ const Sidebar = () => {
     },
     {
       name: "Mes Interventions",
-      href: "/myinterventions",
+      href: "/technicien/interventions",
       icon: <Tool className="h-5 w-5" />,
       role: "technicien",
     },

@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import get_jwt_identity, jwt_required, get_jwt
 from extensions.base_donnees import db
 from modeles.intervention import Intervention
@@ -8,7 +8,8 @@ from modeles.utilisateur import Utilisateur
 from sqlalchemy import or_
 import logging
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
+import json
 
 interventions_bp = Blueprint('interventions', __name__)
 
@@ -67,7 +68,8 @@ def lister_interventions():
         query = Intervention.query.options(
             db.joinedload(Intervention.patient),
             db.joinedload(Intervention.dispositif),
-            db.joinedload(Intervention.technicien)
+            db.joinedload(Intervention.technicien),
+            db.joinedload(Intervention.reglage)
         )
 
         # Restrict technicians to their own interventions
@@ -180,6 +182,23 @@ def lister_interventions():
                         logger.error(f"Error processing technician data for intervention {intervention.id}: {str(tech_error)}\n{traceback.format_exc()}")
                         data['technicien'] = None
 
+                # Handle reglage data
+                if intervention.reglage:
+                    try:
+                        data['reglage'] = {
+                            'id': intervention.reglage.id,
+                            'pmax': intervention.reglage.pmax,
+                            'pmin': intervention.reglage.pmin,
+                            'pramp': intervention.reglage.pramp,
+                            'hu': intervention.reglage.hu,
+                            're': intervention.reglage.re,
+                            'commentaire': intervention.reglage.commentaire
+                        }
+                        logger.debug(f"Reglage data added for intervention {intervention.id}")
+                    except Exception as reglage_error:
+                        logger.error(f"Error processing reglage data for intervention {intervention.id}: {str(reglage_error)}\n{traceback.format_exc()}")
+                        data['reglage'] = None
+
                 interventions_data.append(data)
                 logger.debug(f"Successfully processed intervention {intervention.id}")
             except Exception as e:
@@ -237,96 +256,60 @@ def creer_intervention():
         if not data:
             return jsonify({
                 'success': False,
-                'message': 'Données manquantes'
+                'message': 'Aucune donnée fournie'
             }), 400
 
-        # Valider les données requises
-        required_fields = ['patient_id', 'dispositif_id', 'date_intervention', 'type_intervention']
+        # Vérifier les champs obligatoires
+        required_fields = ['patient_id', 'dispositif_id', 'type_intervention']
         for field in required_fields:
             if field not in data:
                 return jsonify({
                     'success': False,
-                    'message': f'Champ requis manquant: {field}'
+                    'message': f'Champ obligatoire manquant: {field}'
                 }), 400
 
-        # Convertir la date ISO en datetime MySQL
-        try:
-            # Enlever le 'Z' et convertir en datetime
-            date_str = data['date_intervention'].replace('Z', '')
-            date_intervention = datetime.fromisoformat(date_str)
-        except ValueError as e:
-            logger.error(f"Format de date invalide: {data['date_intervention']}")
-            return jsonify({
-                'success': False,
-                'message': 'Format de date invalide'
-            }), 400
+        # Créer l'intervention
+        intervention = Intervention(
+            patient_id=data['patient_id'],
+            dispositif_id=data['dispositif_id'],
+            technicien_id=user_id if user_role == 'technicien' else data.get('technicien_id'),
+            type_intervention=data['type_intervention'],
+            statut=data.get('statut', 'EN_COURS'),
+            remarques=data.get('remarques'),
+            traitement=data.get('traitement'),
+            parametres=data.get('parametres', {})
+        )
 
-        # Créer la nouvelle intervention
-        try:
-            nouvelle_intervention = Intervention(
-                patient_id=data['patient_id'],
+        # Créer les réglages si fournis
+        if 'reglage' in data:
+            from modeles.reglage import Reglage
+            reglage_data = data['reglage']
+            nouveau_reglage = Reglage(
                 dispositif_id=data['dispositif_id'],
-                technicien_id=user_id if user_role == 'technicien' else data.get('technicien_id'),
-                date_planifiee=date_intervention,
-                type_intervention=data['type_intervention'],
-                planifiee=True,
-                commentaire=data.get('description', '')
+                pmax=reglage_data.get('pmax'),
+                pmin=reglage_data.get('pmin'),
+                pramp=reglage_data.get('pramp'),
+                hu=reglage_data.get('hu'),
+                re=reglage_data.get('re'),
+                commentaire=reglage_data.get('commentaire')
             )
+            db.session.add(nouveau_reglage)
+            intervention.reglage = nouveau_reglage
 
-            db.session.add(nouvelle_intervention)
-            db.session.commit()
+        # Sauvegarder l'intervention
+        db.session.add(intervention)
+        db.session.commit()
 
-            # Charger les relations pour la réponse
-            db.session.refresh(nouvelle_intervention)
-            intervention_data = nouvelle_intervention.to_dict()
-
-            # Ajouter les données du patient
-            if nouvelle_intervention.patient:
-                intervention_data['patient'] = {
-                    'id': nouvelle_intervention.patient.id,
-                    'code_patient': nouvelle_intervention.patient.code_patient,
-                    'nom': nouvelle_intervention.patient.nom,
-                    'prenom': nouvelle_intervention.patient.prenom,
-                    'telephone': nouvelle_intervention.patient.telephone,
-                    'email': nouvelle_intervention.patient.email,
-                }
-
-            # Ajouter les données du dispositif
-            if nouvelle_intervention.dispositif:
-                intervention_data['dispositif'] = {
-                    'id': nouvelle_intervention.dispositif.id,
-                    'designation': nouvelle_intervention.dispositif.designation,
-                    'reference': nouvelle_intervention.dispositif.reference,
-                    'numero_serie': nouvelle_intervention.dispositif.numero_serie,
-                }
-
-            # Ajouter les données du technicien
-            if nouvelle_intervention.technicien:
-                intervention_data['technicien'] = {
-                    'id': nouvelle_intervention.technicien.id,
-                    'nom': nouvelle_intervention.technicien.nom,
-                    'prenom': nouvelle_intervention.technicien.prenom,
-                    'email': nouvelle_intervention.technicien.email,
-                }
-
-            logger.info(f"Intervention créée avec succès: {nouvelle_intervention.id}")
-            return jsonify({
-                'success': True,
-                'message': 'Intervention créée avec succès',
-                'data': intervention_data
-            }), 201
-
-        except Exception as e:
-            db.session.rollback()
-            logger.error(f"Erreur lors de la création de l'intervention: {str(e)}\n{traceback.format_exc()}")
-            return jsonify({
-                'success': False,
-                'message': 'Erreur lors de la création de l\'intervention',
-                'error': str(e)
-            }), 500
+        logger.info(f"Intervention créée avec succès par l'utilisateur {user_id}")
+        return jsonify({
+            'success': True,
+            'message': 'Intervention créée avec succès',
+            'data': intervention.to_dict()
+        }), 201
 
     except Exception as e:
-        logger.error(f"Erreur non gérée: {str(e)}\n{traceback.format_exc()}")
+        db.session.rollback()
+        logger.error(f"Error creating intervention: {str(e)}\n{traceback.format_exc()}")
         return jsonify({
             'success': False,
             'message': 'Erreur lors de la création de l\'intervention',
@@ -336,40 +319,38 @@ def creer_intervention():
 @interventions_bp.route('/<int:intervention_id>', methods=['PUT'])
 @jwt_required()
 def modifier_intervention(intervention_id):
-    """Modifier une intervention existante"""
     try:
-        # Récupérer l'ID de l'utilisateur et les claims du token
+        # Récupérer l'utilisateur connecté
         user_id = get_jwt_identity()
         claims = get_jwt()
-        
-        if not user_id:
-            logger.error("No user identity found in JWT token")
+        user_role = claims.get('role')
+
+        if not user_id or not user_role:
+            logger.error("Token invalide ou expiré")
             return jsonify({
                 'success': False,
                 'message': 'Token invalide ou expiré'
             }), 401
 
-        user_role = claims.get('role')
-        if not user_role:
-            logger.error(f"Invalid user data in JWT token: {claims}")
-            return jsonify({
-                'success': False,
-                'message': 'Données utilisateur invalides'
-            }), 401
-
-        # Récupérer l'intervention
-        intervention = Intervention.query.get(intervention_id)
-        if not intervention:
-            return jsonify({
-                'success': False,
-                'message': 'Intervention non trouvée'
-            }), 404
+        # Vérifier si l'intervention existe
+        intervention = Intervention.query.get_or_404(intervention_id)
 
         # Vérifier les permissions
-        if user_role == 'technicien' and intervention.technicien_id != user_id:
+        if user_role == 'technicien':
+            # Un technicien ne peut modifier que ses propres interventions
+            if int(intervention.technicien_id) != int(user_id):
+                logger.warning(
+                    f"Tentative de modification non autorisée - Intervention ID: {intervention_id}, "
+                    f"Technicien connecté: {user_id}, Technicien assigné: {intervention.technicien_id}"
+                )
+                return jsonify({
+                    'success': False,
+                    'message': 'Vous n\'êtes pas autorisé à modifier cette intervention car elle est assignée à un autre technicien'
+                }), 403
+        elif user_role != 'admin':
             return jsonify({
                 'success': False,
-                'message': 'Vous n\'êtes pas autorisé à modifier cette intervention'
+                'message': 'Vous n\'avez pas les permissions nécessaires pour modifier une intervention'
             }), 403
 
         # Récupérer les données de la requête
@@ -377,105 +358,99 @@ def modifier_intervention(intervention_id):
         if not data:
             return jsonify({
                 'success': False,
-                'message': 'Données manquantes'
+                'message': 'Aucune donnée fournie'
             }), 400
 
-        # Mettre à jour les champs modifiables
-        if 'date_intervention' in data:
-            try:
-                # Enlever le 'Z' et convertir en datetime
-                date_str = data['date_intervention'].replace('Z', '')
-                intervention.date_planifiee = datetime.fromisoformat(date_str)
-            except ValueError as e:
-                logger.error(f"Format de date invalide: {data['date_intervention']}")
-                return jsonify({
-                    'success': False,
-                    'message': 'Format de date invalide'
-                }), 400
+        # Mettre à jour les champs de l'intervention
+        for key, value in data.items():
+            if hasattr(intervention, key):
+                # Gérer les champs de type date
+                if key in ['date_prochaine_maintenance', 'date_planifiee', 'date_reelle']:
+                    if value == '' or value is None:
+                        setattr(intervention, key, None)
+                    else:
+                        try:
+                            setattr(intervention, key, datetime.fromisoformat(value.replace('Z', '+00:00')))
+                        except ValueError:
+                            logger.error(f"Format de date invalide pour {key}: {value}")
+                            return jsonify({
+                                'success': False,
+                                'message': f'Format de date invalide pour {key}'
+                            }), 400
+                # Gérer les champs de type JSON/dict
+                elif key in ['parametres', 'verification_securite', 'tests_effectues', 'consommables_utilises', 'photos']:
+                    if isinstance(value, (dict, list)):
+                        setattr(intervention, key, value)
+                    else:
+                        try:
+                            setattr(intervention, key, json.loads(value))
+                        except json.JSONDecodeError:
+                            logger.error(f"Format JSON invalide pour {key}: {value}")
+                            return jsonify({
+                                'success': False,
+                                'message': f'Format JSON invalide pour {key}'
+                            }), 400
+                # Gérer les champs de type reglage
+                elif key == 'reglage':
+                    if value is None:
+                        if intervention.reglage:
+                            db.session.delete(intervention.reglage)
+                            intervention.reglage = None
+                    else:
+                        from modeles.reglage import Reglage
+                        if not intervention.reglage:
+                            # Créer un nouveau réglage
+                            nouveau_reglage = Reglage(
+                                dispositif_id=intervention.dispositif_id,
+                                pmax=value.get('pmax'),
+                                pmin=value.get('pmin'),
+                                pramp=value.get('pramp'),
+                                hu=value.get('hu'),
+                                re=value.get('re'),
+                                commentaire=value.get('commentaire')
+                            )
+                            db.session.add(nouveau_reglage)
+                            intervention.reglage = nouveau_reglage
+                        else:
+                            # Mettre à jour le réglage existant
+                            reglage = intervention.reglage
+                            reglage.pmax = value.get('pmax', reglage.pmax)
+                            reglage.pmin = value.get('pmin', reglage.pmin)
+                            reglage.pramp = value.get('pramp', reglage.pramp)
+                            reglage.hu = value.get('hu', reglage.hu)
+                            reglage.re = value.get('re', reglage.re)
+                            reglage.commentaire = value.get('commentaire', reglage.commentaire)
+                # Gérer les autres champs
+                else:
+                    # Ignorer les objets imbriqués qui ne sont pas des champs directs
+                    if not isinstance(value, (dict, list)) or key in ['patient', 'dispositif', 'technicien']:
+                        # Ne pas mettre à jour les relations directes
+                        if key not in ['patient', 'dispositif', 'technicien']:
+                            setattr(intervention, key, value)
 
-        if 'type_intervention' in data:
-            intervention.type_intervention = data['type_intervention']
-
-        if 'description' in data:
-            intervention.commentaire = data['description']
-
-        if 'temps_prevu' in data:
-            intervention.temps_prevu = data['temps_prevu']
-
-        if 'temps_reel' in data:
-            intervention.temps_reel = data['temps_reel']
-
-        if 'actions_effectuees' in data:
-            intervention.actions_effectuees = data['actions_effectuees']
-
-        if 'satisfaction_technicien' in data:
-            intervention.satisfaction_technicien = data['satisfaction_technicien']
-
-        if 'signature_patient' in data:
-            intervention.signature_patient = data['signature_patient']
-
-        if 'signature_responsable' in data:
-            intervention.signature_responsable = data['signature_responsable']
-
-        # Mettre à jour la base de données
+        # Sauvegarder les modifications
         try:
             db.session.commit()
-            
-            # Charger les relations pour la réponse
-            db.session.refresh(intervention)
-            intervention_data = intervention.to_dict()
-
-            # Ajouter les données du patient
-            if intervention.patient:
-                intervention_data['patient'] = {
-                    'id': intervention.patient.id,
-                    'code_patient': intervention.patient.code_patient,
-                    'nom': intervention.patient.nom,
-                    'prenom': intervention.patient.prenom,
-                    'telephone': intervention.patient.telephone,
-                    'email': intervention.patient.email,
-                }
-
-            # Ajouter les données du dispositif
-            if intervention.dispositif:
-                intervention_data['dispositif'] = {
-                    'id': intervention.dispositif.id,
-                    'designation': intervention.dispositif.designation,
-                    'reference': intervention.dispositif.reference,
-                    'numero_serie': intervention.dispositif.numero_serie,
-                }
-
-            # Ajouter les données du technicien
-            if intervention.technicien:
-                intervention_data['technicien'] = {
-                    'id': intervention.technicien.id,
-                    'nom': intervention.technicien.nom,
-                    'prenom': intervention.technicien.prenom,
-                    'email': intervention.technicien.email,
-                }
-
-            logger.info(f"Intervention {intervention_id} modifiée avec succès")
+            logger.info(f"Intervention {intervention_id} mise à jour avec succès")
             return jsonify({
                 'success': True,
-                'message': 'Intervention modifiée avec succès',
-                'data': intervention_data
-            }), 200
-
+                'message': 'Intervention mise à jour avec succès',
+                'data': intervention.to_dict()
+            })
         except Exception as e:
             db.session.rollback()
-            logger.error(f"Erreur lors de la modification de l'intervention: {str(e)}\n{traceback.format_exc()}")
+            logger.error(f"Erreur lors de la sauvegarde des modifications: {str(e)}")
             return jsonify({
                 'success': False,
-                'message': 'Erreur lors de la modification de l\'intervention',
-                'error': str(e)
+                'message': f'Erreur lors de la sauvegarde des modifications: {str(e)}'
             }), 500
 
     except Exception as e:
-        logger.error(f"Erreur non gérée: {str(e)}\n{traceback.format_exc()}")
+        db.session.rollback()
+        logger.error(f"Erreur lors de la modification de l'intervention: {str(e)}")
         return jsonify({
             'success': False,
-            'message': 'Erreur lors de la modification de l\'intervention',
-            'error': str(e)
+            'message': f'Erreur lors de la modification de l\'intervention: {str(e)}'
         }), 500
 
 @interventions_bp.route('/<int:intervention_id>', methods=['DELETE'])
@@ -540,5 +515,125 @@ def supprimer_intervention(intervention_id):
         return jsonify({
             'success': False,
             'message': 'Erreur lors de la suppression de l\'intervention',
+            'error': str(e)
+        }), 500
+
+@interventions_bp.route('/<int:intervention_id>/reglages', methods=['PUT'])
+@jwt_required()
+def mettre_a_jour_reglages(intervention_id):
+    """Met à jour les réglages d'une intervention"""
+    try:
+        # Récupérer l'intervention
+        intervention = Intervention.query.get_or_404(intervention_id)
+        
+        # Vérifier les permissions
+        user_id = get_jwt_identity()
+        claims = get_jwt()
+        user_role = claims.get('role')
+        
+        if user_role == 'technicien' and intervention.technicien_id != user_id:
+            return jsonify({
+                'success': False,
+                'message': 'Non autorisé à modifier cette intervention'
+            }), 403
+            
+        # Récupérer les données des réglages
+        data = request.get_json()
+        reglage_data = data.get('reglage', {})
+        
+        # Créer ou mettre à jour les réglages
+        if not intervention.reglage:
+            from modeles.reglage import Reglage
+            intervention.reglage = Reglage(
+                dispositif_id=intervention.dispositif_id,
+                pmax=reglage_data.get('pmax'),
+                pmin=reglage_data.get('pmin'),
+                pramp=reglage_data.get('pramp'),
+                hu=reglage_data.get('hu'),
+                re=reglage_data.get('re'),
+                commentaire=reglage_data.get('commentaire')
+            )
+        else:
+            intervention.reglage.pmax = reglage_data.get('pmax', intervention.reglage.pmax)
+            intervention.reglage.pmin = reglage_data.get('pmin', intervention.reglage.pmin)
+            intervention.reglage.pramp = reglage_data.get('pramp', intervention.reglage.pramp)
+            intervention.reglage.hu = reglage_data.get('hu', intervention.reglage.hu)
+            intervention.reglage.re = reglage_data.get('re', intervention.reglage.re)
+            intervention.reglage.commentaire = reglage_data.get('commentaire', intervention.reglage.commentaire)
+        
+        # Sauvegarder les modifications
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Réglages mis à jour avec succès',
+            'data': intervention.reglage.to_dict() if intervention.reglage else None
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erreur lors de la mise à jour des réglages: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({
+            'success': False,
+            'message': 'Erreur lors de la mise à jour des réglages',
+            'error': str(e)
+        }), 500
+
+@interventions_bp.route('/statistiques/technicien', methods=['GET'])
+@jwt_required()
+def statistiques_technicien():
+    """Récupérer les statistiques des interventions pour un technicien"""
+    try:
+        # Récupérer l'ID du technicien depuis le token
+        technicien_id = get_jwt_identity()
+        if not technicien_id:
+            return jsonify({
+                'success': False,
+                'message': 'Token invalide ou expiré'
+            }), 401
+
+        # Récupérer toutes les interventions du technicien
+        interventions = Intervention.query.filter_by(technicien_id=technicien_id).all()
+        
+        # Calculer les statistiques
+        total = len(interventions)
+        en_cours = sum(1 for i in interventions if i.statut == 'en_cours')
+        terminees = sum(1 for i in interventions if i.statut == 'terminee')
+        en_retard = sum(1 for i in interventions if i.statut == 'en_retard')
+
+        # Calculer la répartition par statut
+        par_statut = {}
+        for intervention in interventions:
+            statut = intervention.statut
+            par_statut[statut] = par_statut.get(statut, 0) + 1
+
+        # Calculer l'évolution sur 6 mois
+        par_mois = []
+        now = datetime.now()
+        for i in range(5, -1, -1):
+            date = now - timedelta(days=30*i)
+            mois = date.strftime('%b %Y')
+            count = sum(1 for i in interventions if i.date_creation and i.date_creation.strftime('%b %Y') == mois)
+            par_mois.append({'mois': mois, 'nombre': count})
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'interventions': {
+                    'total': total,
+                    'en_cours': en_cours,
+                    'terminees': terminees,
+                    'en_retard': en_retard,
+                    'par_mois': par_mois,
+                    'par_statut': par_statut
+                }
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Erreur lors de la récupération des statistiques: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({
+            'success': False,
+            'message': 'Erreur lors de la récupération des statistiques',
             'error': str(e)
         }), 500

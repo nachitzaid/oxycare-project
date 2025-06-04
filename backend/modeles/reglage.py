@@ -9,6 +9,8 @@ class Reglage(ModeleBase):
     pmax = db.Column(db.Float)
     pmin = db.Column(db.Float)
     pramp = db.Column(db.Float)
+    hu = db.Column(db.Float)  # Humidité
+    re = db.Column(db.Float)  # Réserve d'expiration
     commentaire = db.Column(db.Text, nullable=True)
     
     def to_dict(self):
@@ -18,6 +20,8 @@ class Reglage(ModeleBase):
             'pmax': self.pmax,
             'pmin': self.pmin,
             'pramp': self.pramp,
+            'hu': self.hu,
+            're': self.re,
             'commentaire': self.commentaire,
             'date_creation': self.date_creation.isoformat() if self.date_creation else None
         }

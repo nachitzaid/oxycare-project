@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { LoginResponse } from '@/types';
+import axiosInstance from '@/lib/axios';
+import axios from 'axios';
 
 interface User {
   id: number;
@@ -14,8 +17,6 @@ interface AuthState {
   loading: boolean;
   error: string | null;
 }
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
 export const useAuth = () => {
   const [state, setState] = useState<AuthState>({
@@ -37,36 +38,32 @@ export const useAuth = () => {
 
   const login = useCallback(async (username: string, password: string) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/connexion`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ nom_utilisateur: username, mot_de_passe: password }),
+      const response = await axiosInstance.post('/auth/connexion', {
+        nom_utilisateur: username,
+        mot_de_passe: password
       });
 
-      const data = await response.json();
+      console.log("Données de connexion reçues:", response.data);
 
-      if (!response.ok) {
-        throw new Error(data.message || 'Erreur de connexion');
-      }
-
-      setTokens(data.access_token, data.refresh_token);
+      localStorage.setItem('access_token', response.data.access_token);
+      localStorage.setItem('refresh_token', response.data.refresh_token);
+      
       setState({
-        user: data.utilisateur,
+        user: response.data.utilisateur,
         loading: false,
         error: null,
       });
 
       return true;
     } catch (error) {
+      console.error("Erreur lors de la connexion:", error);
       setState(prev => ({
         ...prev,
         error: error instanceof Error ? error.message : 'Erreur de connexion',
       }));
       return false;
     }
-  }, [setTokens]);
+  }, []);
 
   const logout = useCallback(() => {
     clearTokens();
@@ -85,20 +82,13 @@ export const useAuth = () => {
         throw new Error('No refresh token');
       }
 
-      const response = await fetch(`${API_BASE_URL}/auth/rafraichir`, {
-        method: 'POST',
+      const response = await axiosInstance.post('/auth/rafraichir', null, {
         headers: {
           'Authorization': `Bearer ${refreshToken}`,
         },
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Erreur de rafraîchissement du token');
-      }
-
-      localStorage.setItem('access_token', data.access_token);
+      localStorage.setItem('access_token', response.data.access_token);
       return true;
     } catch (error) {
       clearTokens();
@@ -119,20 +109,15 @@ export const useAuth = () => {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/profil`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-        },
-      });
+      const response = await axiosInstance.get('/auth/profil');
 
-      if (response.ok) {
-        const user = await response.json();
         setState({
-          user,
+        user: response.data,
           loading: false,
           error: null,
         });
-      } else if (response.status === 401) {
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
         const refreshed = await refreshToken();
         if (!refreshed) {
           setState({
@@ -142,14 +127,12 @@ export const useAuth = () => {
           });
         }
       } else {
-        throw new Error('Erreur de vérification du profil');
-      }
-    } catch (error) {
       setState({
         user: null,
         loading: false,
         error: error instanceof Error ? error.message : 'Erreur de vérification',
       });
+      }
     }
   }, [refreshToken]);
 
@@ -158,16 +141,21 @@ export const useAuth = () => {
   }, [checkAuth]);
 
   const isAuthenticated = useCallback(() => {
-    return !!state.user;
-  }, [state.user]);
+    return !!state.user && !state.loading;
+  }, [state.user, state.loading]);
 
   const isAdmin = useCallback(() => {
-    return state.user?.role === 'admin';
-  }, [state.user]);
+    return state.user?.role === 'admin' && !state.loading;
+  }, [state.user, state.loading]);
 
   const isTechnician = useCallback(() => {
-    return state.user?.role === 'technicien';
-  }, [state.user]);
+    console.log("Vérification du rôle technicien:", {
+      user: state.user,
+      role: state.user?.role,
+      loading: state.loading
+    });
+    return state.user?.role === 'technicien' && !state.loading;
+  }, [state.user, state.loading]);
 
   return {
     user: state.user,
