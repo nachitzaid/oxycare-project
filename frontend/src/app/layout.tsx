@@ -17,6 +17,12 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 })
 
+// Métadonnées requises pour Vercel
+export const metadata = {
+  title: "Votre Application",
+  description: "Application de gestion",
+}
+
 export default function RootLayout({
   children,
 }: Readonly<{
