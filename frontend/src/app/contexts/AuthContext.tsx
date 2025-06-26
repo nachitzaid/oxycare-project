@@ -30,14 +30,17 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const router = useRouter()
 
   useEffect(() => {
-    const loadUserData = () => {
+    const loadUserData = async () => {
       try {
         const accessToken = localStorage.getItem("access_token")
-        const storedUser = localStorage.getItem("user")
+        if (!accessToken) {
+          setLoading(false)
+          return
+        }
 
-        if (accessToken && storedUser) {
           try {
-            const userData = JSON.parse(storedUser)
+          const response = await axios.get("/api/auth/profil")
+          const userData = response.data
             
             // Vérification supplémentaire des données utilisateur
             if (!userData.id || !userData.nom_utilisateur || !userData.role) {
@@ -47,11 +50,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
             setUser(userData)
             axios.defaults.headers.common["Authorization"] = `Bearer ${accessToken}`
           } catch (error) {
-            console.error("Erreur lors du parsing des données utilisateur:", error)
+          console.error("Erreur lors du chargement du profil:", error)
             localStorage.removeItem("access_token")
             localStorage.removeItem("refresh_token")
             localStorage.removeItem("user")
-          }
         }
       } catch (error) {
         console.error("Erreur lors du chargement des données utilisateur:", error)
@@ -81,10 +83,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         throw new Error("Nom d'utilisateur et mot de passe requis")
       }
 
-      const response = await axios.post<LoginResponse>("/auth/connexion", {
+      const response = await axios.post<LoginResponse>("/api/auth/connexion", {
         nom_utilisateur: username,
         mot_de_passe: password,
       })
+
+      console.log("Réponse de connexion:", response.data);
 
       const { utilisateur, access_token, refresh_token } = response.data
 
@@ -96,6 +100,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       if (!utilisateur.id || !utilisateur.nom_utilisateur || !utilisateur.role) {
         throw new Error("Données utilisateur incomplètes")
       }
+
+      console.log("Données utilisateur validées:", utilisateur);
 
       // Stockage sécurisé
       localStorage.setItem("access_token", access_token)
@@ -143,6 +149,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }
 
   const isTechnician = (): boolean => {
+    console.log("Vérification du rôle technicien:", {
+      user,
+      role: user?.role,
+      isAuthenticated: isAuthenticated(),
+      loading
+    });
     return isAuthenticated() && user?.role === "technicien"
   }
 

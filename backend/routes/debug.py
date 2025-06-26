@@ -282,20 +282,6 @@ def debug_create_patient():
                     'message': f'Le champ {champ} est requis'
                 }), 400
         
-        # Générer un code patient unique
-        dernier_patient = Patient.query.order_by(Patient.id.desc()).first()
-        if dernier_patient and hasattr(dernier_patient, 'code_patient') and dernier_patient.code_patient:
-            try:
-                # Extraire le numéro du dernier code (format P001, P002, etc.)
-                dernier_numero = int(dernier_patient.code_patient[1:])
-                nouveau_numero = dernier_numero + 1
-            except:
-                nouveau_numero = Patient.query.count() + 1
-        else:
-            nouveau_numero = Patient.query.count() + 1
-        
-        code_patient = f"P{nouveau_numero:03d}"
-        
         # Traiter la date de naissance
         date_naissance = None
         if data.get('date_naissance'):
@@ -312,7 +298,6 @@ def debug_create_patient():
         
         # Créer le nouveau patient
         nouveau_patient = Patient(
-            code_patient=code_patient,
             nom=data['nom'],
             prenom=data['prenom'],
             cin=data.get('cin', ''),
@@ -325,6 +310,9 @@ def debug_create_patient():
             prescripteur_id=data.get('prescripteur_id'),
             technicien_id=data.get('technicien_id')
         )
+        
+        # Générer le code patient unique
+        nouveau_patient.generer_code_patient()
         
         # Sauvegarder en base de données
         db.session.add(nouveau_patient)
@@ -353,7 +341,7 @@ def debug_create_patient():
         return jsonify({
             'success': True,
             'data': patient_data,
-            'message': f'Patient {nouveau_patient.prenom} {nouveau_patient.nom} ({code_patient}) créé avec succès'
+            'message': f'Patient {nouveau_patient.prenom} {nouveau_patient.nom} ({nouveau_patient.code_patient}) créé avec succès'
         }), 201
         
     except Exception as e:

@@ -5,6 +5,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { ToastContainer } from "react-toastify"
 import "react-toastify/dist/ReactToastify.css"
 import "./globals.css"
+import { Toaster } from "@/components/ui/toaster"
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,6 +29,7 @@ export default function RootLayout({
           <AuthProvider>
             {children}
             <ToastContainer position="top-right" autoClose={3000} />
+            <Toaster />
           </AuthProvider>
         </ThemeProvider>
       </body>

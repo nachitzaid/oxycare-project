@@ -15,38 +15,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import Modal from "../common/Modal";
 import InterventionForm from "./InterventionForm";
 import InterventionDetails from "./InterventionDetails";
-
-// Types
-interface Patient {
-  id: number;
-  code_patient: string;
-  nom: string;
-  prenom: string;
-  telephone?: string;
-  email?: string;
-}
-
-interface Intervention {
-  id: number;
-  patient_id: number;
-  dispositif_id: number;
-  technicien_id: number;
-  type_intervention: string;
-  planifiee: boolean;
-  date_planifiee: string | null;
-  date_reelle: string | null;
-  temps_prevu: number | null;
-  temps_reel: number | null;
-  actions_effectuees: any;
-  satisfaction_technicien: number | null;
-  signature_patient: boolean;
-  signature_responsable: boolean;
-  commentaire: string | null;
-  date_creation: string | null;
-  patient?: Patient;
-  dispositif?: any;
-  technicien?: any;
-}
+import { Intervention, InterventionStatus } from '@/types/intervention';
+import { useToast } from '@/components/ui/use-toast';
+import { InterventionList } from './InterventionList'; 
 
 const InterventionManagementAdmin = () => {
   const { user, isAuthenticated, isAdmin, loading: authLoading } = useAuth();
@@ -58,7 +29,10 @@ const InterventionManagementAdmin = () => {
     fetchInterventions, 
     createIntervention,
     makeRequest, 
-    showMessage 
+    showMessage,
+    pagination,
+    updateIntervention,
+    deleteIntervention
   } = useInterventions();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -66,7 +40,9 @@ const InterventionManagementAdmin = () => {
   const [editingIntervention, setEditingIntervention] = useState<Intervention | null>(null);
   const [viewingIntervention, setViewingIntervention] = useState<Intervention | null>(null);
   const [deletingIntervention, setDeletingIntervention] = useState<Intervention | null>(null);
+  const [selectedStatus, setSelectedStatus] = useState<InterventionStatus | ''>('');
   const router = useRouter();
+  const { toast } = useToast();
 
   // Redirect non-admins or unauthenticated users
   useEffect(() => {
@@ -114,7 +90,7 @@ const InterventionManagementAdmin = () => {
   useEffect(() => {
     const timer = setTimeout(() => {
       if (searchTerm) {
-        fetchInterventions(searchTerm);
+        fetchInterventions(1, pagination.perPage, { recherche: searchTerm });
       }
     }, 300);
 
@@ -146,44 +122,34 @@ const InterventionManagementAdmin = () => {
   };
 
   // Handle intervention edit
-  const handleEditIntervention = async (interventionData: Partial<Intervention>) => {
-    if (!editingIntervention) return;
-
+  const handleUpdate = async (editingIntervention: Intervention) => {
     try {
-      const response = await makeRequest(`/interventions/${editingIntervention.id}`, {
-        method: "PUT",
-        body: JSON.stringify(interventionData),
-      });
-
+      const response = await updateIntervention(editingIntervention);
       if (response.success) {
-        showMessage("Intervention modifiée avec succès", "success");
-        setEditingIntervention(null);
-        await fetchInterventions(searchTerm);
+        showMessage("Intervention mise à jour avec succès", "success");
+        await fetchInterventions();
       } else {
-        throw new Error(response.message || "Erreur lors de la modification");
+        throw new Error(response.message || "Erreur lors de la mise à jour");
       }
-    } catch (err) {
-      showMessage(err instanceof Error ? err.message : "Erreur lors de la modification de l'intervention", "error");
+    } catch (error) {
+      console.error("Erreur lors de la mise à jour:", error);
+      showMessage(error instanceof Error ? error.message : "Une erreur est survenue", "error");
     }
   };
 
   // Handle intervention deletion
-  const handleDeleteIntervention = async (interventionId: number) => {
+  const handleDelete = async (interventionId: number) => {
     try {
-      const response = await makeRequest(`/interventions/${interventionId}`, {
-        method: 'DELETE',
-      });
-
+      const response = await deleteIntervention(interventionId);
       if (response.success) {
         showMessage("Intervention supprimée avec succès", "success");
-        await fetchInterventions(searchTerm);
+        await fetchInterventions();
       } else {
         throw new Error(response.message || "Erreur lors de la suppression");
       }
     } catch (error) {
-      console.error('Erreur lors de la suppression:', error);
-      showMessage(error instanceof Error ? error.message : "Erreur lors de la suppression de l'intervention", "error");
-      throw error;
+      console.error("Erreur lors de la suppression:", error);
+      showMessage(error instanceof Error ? error.message : "Une erreur est survenue", "error");
     }
   };
 
@@ -345,7 +311,7 @@ const InterventionManagementAdmin = () => {
           <InterventionForm
             mode="edit"
             intervention={editingIntervention}
-            onSubmit={handleEditIntervention}
+            onSubmit={handleUpdate}
             onClose={() => setEditingIntervention(null)}
           />
         </Modal>
@@ -359,7 +325,7 @@ const InterventionManagementAdmin = () => {
             setViewingIntervention(null);
             setEditingIntervention(intervention);
           }}
-          onDelete={handleDeleteIntervention}
+          onDelete={handleDelete}
         />
       )}
 
@@ -385,7 +351,7 @@ const InterventionManagementAdmin = () => {
               <Button onClick={() => setDeletingIntervention(null)} variant="outline">
                 Annuler
               </Button>
-              <Button onClick={() => handleDeleteIntervention(deletingIntervention.id)} variant="destructive">
+              <Button onClick={() => handleDelete(deletingIntervention.id)} variant="destructive">
                 Supprimer
               </Button>
             </div>

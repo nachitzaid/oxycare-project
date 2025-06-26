@@ -1,5 +1,5 @@
 // hooks/useInterventions.ts
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/app/contexts/AuthContext";
 
 interface Intervention {
@@ -7,21 +7,32 @@ interface Intervention {
   patient_id: number;
   dispositif_id: number;
   technicien_id: number;
+  reglage_id: number | null;
+  traitement: string;
   type_intervention: string;
-  planifiee: boolean;
-  date_planifiee: string | null;
+  date_planifiee: string;
   date_reelle: string | null;
-  temps_prevu: number | null;
-  temps_reel: number | null;
+  lieu: string;
+  etat_materiel: string | null;
+  type_concentrateur: string | null;
+  mode_ventilation: string | null;
+  type_masque: string | null;
+  statut: string;
   actions_effectuees: any;
-  satisfaction_technicien: number | null;
-  signature_patient: boolean;
-  signature_responsable: boolean;
-  commentaire: string | null;
-  date_creation: string | null;
+  accessoires_utilises: any;
+  photos: any;
+  signature_technicien: string | null;
+  rapport_pdf_url: string | null;
+  parametres: any;
+  remarques: string | null;
+  motif_annulation: string | null;
+  date_reprogrammation: string | null;
+  date_creation: string;
+  date_modification: string;
   patient?: any;
   dispositif?: any;
   technicien?: any;
+  reglage?: any;
 }
 
 interface InterventionFormData {
@@ -33,6 +44,28 @@ interface InterventionFormData {
   statut?: string;
   description?: string;
   notes?: string;
+  reglage?: {
+    pmax?: number;
+    pmin?: number;
+    pramp?: number;
+    hu?: number;
+    re?: number;
+    commentaire?: string;
+  };
+}
+
+interface PaginationData {
+  page_courante: string;
+  elements_par_page: string;
+  total: number;
+  pages_totales: number;
+  items: Intervention[];
+}
+
+interface ApiResponse {
+  success: boolean;
+  data?: PaginationData;
+  message?: string;
 }
 
 export const useInterventions = () => {
@@ -41,7 +74,17 @@ export const useInterventions = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [pagination, setPagination] = useState<{
+    page: string;
+    perPage: string;
+    total: number;
+    totalPages: number;
+  }>({
+    page: "1",
+    perPage: "10",
+    total: 0,
+    totalPages: 0
+  });
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
 
   const refreshAccessToken = async () => {
@@ -57,6 +100,7 @@ export const useInterventions = () => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${refreshToken}`,
         },
+        credentials: "include",
       });
 
       if (!response.ok) {
@@ -86,13 +130,15 @@ export const useInterventions = () => {
     const headers = new Headers({
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
+      Accept: "application/json",
       ...(options.headers as Record<string, string> || {}),
     });
 
     const config: RequestInit = {
-      method: options.method || "GET",
+      ...options,
       headers,
       credentials: "include",
+      mode: "cors",
     };
 
     if (options.body) {
@@ -100,14 +146,15 @@ export const useInterventions = () => {
     }
 
     try {
+      const fullUrl = `${API_BASE_URL}${url}`;
       console.log("Envoi de la requête:", {
-        url: `${API_BASE_URL}${url}`,
+        url: fullUrl,
         method: config.method,
         headers: Object.fromEntries(headers.entries()),
         body: options.body,
       });
 
-      const response = await fetch(`${API_BASE_URL}${url}`, config);
+      const response = await fetch(fullUrl, config);
       
       if (response.status === 401) {
         console.log("Token expiré, tentative de rafraîchissement...");
@@ -115,7 +162,7 @@ export const useInterventions = () => {
         headers.set("Authorization", `Bearer ${token}`);
         
         console.log("Nouvelle tentative avec le token rafraîchi...");
-        const retryResponse = await fetch(`${API_BASE_URL}${url}`, {
+        const retryResponse = await fetch(fullUrl, {
           ...config,
           headers,
         });
@@ -139,10 +186,12 @@ export const useInterventions = () => {
       console.log("Réponse reçue:", data);
       return data;
     } catch (error) {
-      console.error(`Erreur requête ${url}:`, error);
+      console.error("Erreur lors de la requête:", error);
       throw error;
     }
   };
+
+  const makeRequestRef = useRef(makeRequest);
 
   const showMessage = useCallback((message: string, type: "success" | "error") => {
     if (type === "success") {
@@ -154,116 +203,157 @@ export const useInterventions = () => {
     }
   }, []);
 
-  const fetchInterventions = useCallback(async (search = "") => {
-    if (!isAuthenticated()) {
-      setError("Vous devez être connecté pour voir les interventions");
-      return;
-    }
-
-    if (loading) {
-      return;
-    }
-
+  const fetchInterventions = useCallback(async (page = 1, perPage = 10, filters: Record<string, string> = {}) => {
     setLoading(true);
     setError(null);
-
     try {
-      const params = new URLSearchParams();
-      if (isTechnician() && user?.id) {
-        params.append("technicien_id", user.id.toString());
-      }
-      if (search) params.append("recherche", search);
-
-      const data = await makeRequest(`/interventions?${params.toString()}`);
-      
-      if (data.success && Array.isArray(data.data.items)) {
-        setInterventions(data.data.items);
-        showMessage(`${data.data.items.length} interventions trouvées`, "success");
-      } else {
-        throw new Error(data.message || "Erreur lors du chargement des interventions");
-      }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Erreur lors du chargement";
-      showMessage(errorMessage, "error");
-      setInterventions([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [isAuthenticated, isTechnician, user?.id, loading, showMessage]);
-
-  const createIntervention = useCallback(async (interventionData: InterventionFormData) => {
-    if (!isAuthenticated()) {
-      setError("Vous devez être connecté pour créer une intervention");
-      return null;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      console.log("Données reçues pour création:", interventionData);
-
-      const formattedData = {
-        patient_id: interventionData.patient_id,
-        dispositif_id: interventionData.dispositif_id,
-        technicien_id: interventionData.technicien_id || user?.id,
-        type_intervention: interventionData.type_intervention,
-        date_intervention: interventionData.date_intervention,
-        description: interventionData.description || interventionData.notes || "",
-        statut: "planifiée"
-      };
-
-      console.log("Données formatées pour l'API:", formattedData);
-
-      const data = await makeRequest("/interventions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(formattedData)
+      const params = new URLSearchParams({
+        page: page.toString(),
+        per_page: perPage.toString(),
+        ...filters
       });
 
-      console.log("Réponse de création:", data);
-
-      if (data.success) {
-        showMessage("Intervention créée avec succès", "success");
-        await fetchInterventions();
-        return data.data;
-      } else {
-        throw new Error(data.message || "Erreur lors de la création de l'intervention");
+      if (isTechnician()) {
+        params.append('technicien_id', user?.id?.toString() || '');
       }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Erreur lors de la création";
-      console.error("Erreur détaillée:", err);
-      showMessage(errorMessage, "error");
-      return null;
+
+      const response = await makeRequestRef.current(`/api/interventions?${params.toString()}`);
+      if (response.success && response.data) {
+        setInterventions(response.data.items);
+        setPagination({
+          page: response.data.page_courante,
+          perPage: response.data.elements_par_page,
+          total: response.data.total,
+          totalPages: response.data.pages_totales
+        });
+      } else {
+        throw new Error(response.message || "Erreur lors de la récupération des interventions");
+      }
+    } catch (error) {
+      console.error("Erreur lors de la récupération des interventions:", error);
+      setError(error instanceof Error ? error.message : "Une erreur est survenue");
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated, user?.id, fetchInterventions, showMessage]);
+  }, []);
+
+  const changePage = useCallback((newPage: number) => {
+    fetchInterventions(newPage, Number(pagination.perPage));
+  }, [fetchInterventions, pagination.perPage]);
+
+  const changePerPage = useCallback((newPerPage: number) => {
+    fetchInterventions(Number(pagination.page), newPerPage);
+  }, [fetchInterventions, pagination.page]);
+
+  const createIntervention = async (data: InterventionFormData) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await makeRequest("/api/interventions", {
+        method: "POST",
+        body: JSON.stringify(data)
+      });
+      if (response.success) {
+        showMessage("Intervention créée avec succès", "success");
+        return response.data;
+      } else {
+        throw new Error(response.message || "Erreur lors de la création de l'intervention");
+      }
+    } catch (error) {
+      console.error("Erreur lors de la création de l'intervention:", error);
+      setError(error instanceof Error ? error.message : "Une erreur est survenue");
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateIntervention = async (data: Intervention) => {
+    setLoading(true);
+    setError(null);
+    try {
+      // Vérification stricte des permissions pour les techniciens
+      if (isTechnician()) {
+        // Récupérer l'intervention originale pour vérifier le technicien_id
+        const originalIntervention = interventions.find(i => i.id === data.id);
+        if (!originalIntervention) {
+          throw new Error("Intervention non trouvée");
+        }
+        
+        // Vérifier que l'intervention est bien assignée au technicien connecté
+        if (String(originalIntervention.technicien_id) !== String(user?.id)) {
+          console.error("Tentative de modification non autorisée:", {
+            interventionId: data.id,
+            interventionTechnicienId: originalIntervention.technicien_id,
+            userId: user?.id
+          });
+          throw new Error("Vous n'êtes pas autorisé à modifier cette intervention car elle est assignée à un autre technicien");
+        }
+      }
+
+      const response = await makeRequest(`/api/interventions/${data.id}`, {
+        method: "PUT",
+        body: JSON.stringify(data)
+      });
+
+      if (response.success) {
+        showMessage("Intervention mise à jour avec succès", "success");
+        // Rafraîchir la liste des interventions
+        await fetchInterventions(Number(pagination.page), Number(pagination.perPage));
+        return response;
+      } else {
+        throw new Error(response.message || "Erreur lors de la mise à jour");
+      }
+    } catch (error) {
+      console.error("Erreur lors de la mise à jour:", error);
+      const errorMessage = error instanceof Error ? error.message : "Une erreur est survenue";
+      setError(errorMessage);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteIntervention = async (id: number) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await makeRequest(`/api/interventions/${id}`, {
+        method: "DELETE"
+      });
+      if (response.success) {
+        showMessage("Intervention supprimée avec succès", "success");
+        return response;
+      } else {
+        throw new Error(response.message || "Erreur lors de la suppression");
+      }
+    } catch (error) {
+      console.error("Erreur lors de la suppression:", error);
+      setError(error instanceof Error ? error.message : "Une erreur est survenue");
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    let mounted = true;
-    if (isInitialLoad && isAuthenticated() && mounted) {
-      fetchInterventions().then(() => {
-        if (mounted) {
-          setIsInitialLoad(false);
-        }
-      });
+    if (isAuthenticated()) {
+    fetchInterventions();
     }
-    return () => {
-      mounted = false;
-    };
-  }, [isInitialLoad, isAuthenticated, fetchInterventions]);
+  }, [isAuthenticated, fetchInterventions]);
 
   return {
     interventions,
     loading,
     error,
     success,
+    pagination,
     fetchInterventions,
+    changePage,
+    changePerPage,
     createIntervention,
-    makeRequest,
+    updateIntervention,
+    deleteIntervention,
     showMessage
   };
 };

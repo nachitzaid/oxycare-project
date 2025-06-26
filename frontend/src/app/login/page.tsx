@@ -23,7 +23,7 @@ export default function Login() {
   // Fonction pour tester la connexion au serveur
   const testServerConnection = async () => {
     try {
-      const response = await axios.get('/health')
+      const response = await axios.get('/api/health')
       setDebugInfo(`✅ Serveur accessible: ${response.data.message}`)
       toast.success("Serveur accessible")
     } catch (error: any) {

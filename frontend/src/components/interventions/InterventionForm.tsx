@@ -48,9 +48,10 @@ interface InterventionFormProps {
   intervention?: Intervention | null;
   onSubmit: (interventionData: Partial<Intervention>) => Promise<void>;
   onClose: () => void;
+  showFollowUp?: boolean;
 }
 
-const InterventionForm: React.FC<InterventionFormProps> = ({ mode, intervention, onSubmit, onClose }) => {
+const InterventionForm: React.FC<InterventionFormProps> = ({ mode, intervention, onSubmit, onClose, showFollowUp = false }) => {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [technicians, setTechnicians] = useState<User[]>([]);
   const [patientDevices, setPatientDevices] = useState<DispositifMedical[]>([]);
@@ -264,10 +265,12 @@ const InterventionForm: React.FC<InterventionFormProps> = ({ mode, intervention,
         date_reelle: formData.date_reelle
           ? new Date(formData.date_reelle).toISOString()
           : null,
+        ...(mode === "edit" && intervention?.id ? { id: intervention.id } : {}),
       };
 
       console.log("Données soumises:", submitData);
       await onSubmit(submitData);
+      onClose();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Erreur lors de la soumission";
       setError(errorMessage);
@@ -499,8 +502,10 @@ const InterventionForm: React.FC<InterventionFormProps> = ({ mode, intervention,
             />
           </div>
 
-          {!formData.planifiee && (
+          {showFollowUp && (
             <div className="p-4 bg-blue-50 rounded-lg space-y-4">
+              <h3 className="text-lg font-semibold text-gray-700">Suivi de l'intervention</h3>
+              
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Date et heure réelles

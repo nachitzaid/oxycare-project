@@ -374,15 +374,6 @@ const InterventionDetails: React.FC<InterventionDetailsProps> = ({ intervention,
                 </div>
               )}
 
-              {intervention.commentaire && (
-                <div className="p-4 bg-muted/30 rounded-md mb-6">
-                  <h4 className="font-medium flex items-center mb-2">
-                    <FileText className="h-4 w-4 mr-2" /> Commentaire initial
-                  </h4>
-                  <p className="text-sm whitespace-pre-line">{intervention.commentaire}</p>
-                </div>
-              )}
-
               {/* Section pour les interventions terminées */}
               {isCompleted && (
                 <div className="p-4 bg-green-50 dark:bg-green-950/20 rounded-md">

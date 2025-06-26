@@ -1,0 +1,567 @@
+from flask import Blueprint, request, jsonify
+from flask_jwt_extended import get_jwt_identity, jwt_required, get_jwt
+from extensions.base_donnees import db
+from modeles.intervention import Intervention
+from modeles.patient import Patient
+from modeles.dispositif_medical import DispositifMedical
+from modeles.utilisateur import Utilisateur
+from sqlalchemy import or_
+import logging
+import traceback
+from datetime import datetime
+
+interventions_bp = Blueprint('interventions', __name__)
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+@interventions_bp.route('', methods=['GET'])
+@jwt_required()
+def lister_interventions():
+    """Récupérer toutes les interventions avec pagination et recherche"""
+    try:
+        # Récupérer l'ID de l'utilisateur et les claims du token
+        user_id = get_jwt_identity()
+        claims = get_jwt()
+        
+        if not user_id:
+            logger.error("No user identity found in JWT token")
+            return jsonify({
+                'success': False,
+                'message': 'Token invalide ou expiré'
+            }), 401
+
+        user_role = claims.get('role')
+        if not user_role:
+            logger.error(f"Invalid user data in JWT token: {claims}")
+            return jsonify({
+                'success': False,
+                'message': 'Données utilisateur invalides'
+            }), 401
+
+        logger.info(f"Processing request for user {user_id} with role {user_role}")
+
+        # Validate query parameters
+        try:
+            page = request.args.get('page', 1, type=int)
+            per_page = request.args.get('per_page', 10, type=int)
+            if page < 1 or per_page < 1 or per_page > 100:
+                raise ValueError("Page or per_page invalid")
+        except (ValueError, TypeError) as e:
+            logger.error(f"Invalid pagination parameters: {str(e)}, page={request.args.get('page')}, per_page={request.args.get('per_page')}")
+            return jsonify({
+                'success': False,
+                'message': 'Paramètres de pagination invalides',
+                'error': str(e)
+            }), 422
+
+        recherche = request.args.get('recherche', '', type=str).strip()
+        technicien_id = request.args.get('technicien_id', type=int)
+        statut = request.args.get('statut', type=str)
+        type_intervention = request.args.get('type', type=str)
+
+        logger.debug(f"Query parameters: recherche={recherche}, technicien_id={technicien_id}, statut={statut}, type={type_intervention}")
+
+        # Build query with eager loading
+        query = Intervention.query.options(
+            db.joinedload(Intervention.patient),
+            db.joinedload(Intervention.dispositif),
+            db.joinedload(Intervention.technicien),
+            db.joinedload(Intervention.reglage)
+        )
+
+        # Restrict technicians to their own interventions
+        if user_role == 'technicien':
+            query = query.filter(Intervention.technicien_id == user_id)
+            logger.info(f"Filtering interventions for technician {user_id}")
+        elif user_role != 'admin':
+            logger.error(f"Unauthorized role: {user_role}")
+            return jsonify({
+                'success': False,
+                'message': 'Rôle non autorisé'
+            }), 403
+
+        # Admin can filter by technicien_id
+        if technicien_id and user_role == 'admin':
+            query = query.filter(Intervention.technicien_id == technicien_id)
+            logger.info(f"Admin filtering by technician {technicien_id}")
+
+        # Filter by status
+        if statut:
+            query = query.filter(Intervention.statut == statut)
+
+        # Filter by intervention type
+        if type_intervention:
+            query = query.filter(Intervention.type_intervention == type_intervention)
+
+        # Text search
+        if recherche:
+            try:
+                query = query.join(Patient, Intervention.patient_id == Patient.id, isouter=True).join(
+                    DispositifMedical, Intervention.dispositif_id == DispositifMedical.id, isouter=True
+                ).join(Utilisateur, Intervention.technicien_id == Utilisateur.id, isouter=True).filter(
+                    or_(
+                        Patient.nom.ilike(f'%{recherche}%'),
+                        Patient.prenom.ilike(f'%{recherche}%'),
+                        DispositifMedical.designation.ilike(f'%{recherche}%'),
+                        DispositifMedical.reference.ilike(f'%{recherche}%'),
+                        Utilisateur.nom.ilike(f'%{recherche}%'),
+                        Utilisateur.prenom.ilike(f'%{recherche}%'),
+                    )
+                )
+                logger.info(f"Search query applied: {recherche}")
+            except Exception as e:
+                logger.error(f"Error in search query: {str(e)}\n{traceback.format_exc()}")
+                return jsonify({
+                    'success': False,
+                    'message': 'Erreur dans la recherche',
+                    'error': str(e)
+                }), 400
+
+        # Pagination
+        try:
+            interventions_paginated = query.paginate(page=page, per_page=per_page, error_out=False)
+            logger.info(f"Found {interventions_paginated.total} interventions")
+        except Exception as e:
+            logger.error(f"Error in pagination: {str(e)}\n{traceback.format_exc()}")
+            return jsonify({
+                'success': False,
+                'message': 'Erreur lors de la pagination',
+                'error': str(e)
+            }), 500
+
+        # Serialize data
+        interventions_data = []
+        for intervention in interventions_paginated.items:
+            try:
+                data = intervention.to_dict()
+                
+                # Handle patient data
+                if intervention.patient:
+                    try:
+                        data['patient'] = {
+                            'id': intervention.patient.id,
+                            'code_patient': intervention.patient.code_patient,
+                            'nom': intervention.patient.nom,
+                            'prenom': intervention.patient.prenom,
+                            'telephone': intervention.patient.telephone,
+                            'email': intervention.patient.email,
+                        }
+                        logger.debug(f"Patient data added for intervention {intervention.id}")
+                    except Exception as patient_error:
+                        logger.error(f"Error processing patient data for intervention {intervention.id}: {str(patient_error)}\n{traceback.format_exc()}")
+                        data['patient'] = None
+
+                # Handle device data
+                if intervention.dispositif:
+                    try:
+                        data['dispositif'] = {
+                            'id': intervention.dispositif.id,
+                            'designation': intervention.dispositif.designation,
+                            'reference': intervention.dispositif.reference,
+                            'numero_serie': intervention.dispositif.numero_serie,
+                        }
+                        logger.debug(f"Device data added for intervention {intervention.id}")
+                    except Exception as device_error:
+                        logger.error(f"Error processing device data for intervention {intervention.id}: {str(device_error)}\n{traceback.format_exc()}")
+                        data['dispositif'] = None
+
+                # Handle technician data
+                if intervention.technicien:
+                    try:
+                        data['technicien'] = {
+                            'id': intervention.technicien.id,
+                            'nom': intervention.technicien.nom,
+                            'prenom': intervention.technicien.prenom,
+                            'email': intervention.technicien.email,
+                        }
+                        logger.debug(f"Technician data added for intervention {intervention.id}")
+                    except Exception as tech_error:
+                        logger.error(f"Error processing technician data for intervention {intervention.id}: {str(tech_error)}\n{traceback.format_exc()}")
+                        data['technicien'] = None
+
+                # Handle reglage data
+                if intervention.reglage:
+                    try:
+                        data['reglage'] = {
+                            'id': intervention.reglage.id,
+                            'pmax': intervention.reglage.pmax,
+                            'pmin': intervention.reglage.pmin,
+                            'pramp': intervention.reglage.pramp,
+                            'hu': intervention.reglage.hu,
+                            're': intervention.reglage.re,
+                            'commentaire': intervention.reglage.commentaire
+                        }
+                        logger.debug(f"Reglage data added for intervention {intervention.id}")
+                    except Exception as reglage_error:
+                        logger.error(f"Error processing reglage data for intervention {intervention.id}: {str(reglage_error)}\n{traceback.format_exc()}")
+                        data['reglage'] = None
+
+                interventions_data.append(data)
+                logger.debug(f"Successfully processed intervention {intervention.id}")
+            except Exception as e:
+                logger.error(f"Error serializing intervention {intervention.id}: {str(e)}\n{traceback.format_exc()}")
+                continue
+
+        response_data = {
+            'success': True,
+            'data': {
+                'items': interventions_data,
+                'page_courante': interventions_paginated.page,
+                'pages_totales': interventions_paginated.pages,
+                'total': interventions_paginated.total,
+                'elements_par_page': interventions_paginated.per_page,
+            },
+            'message': f'{len(interventions_data)} interventions trouvées',
+        }
+
+        return jsonify(response_data), 200
+
+    except Exception as e:
+        logger.error(f"Unexpected error in lister_interventions: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({
+            'success': False,
+            'message': 'Erreur serveur inattendue',
+            'error': str(e)
+        }), 500
+
+@interventions_bp.route('', methods=['POST'])
+@jwt_required()
+def creer_intervention():
+    """Créer une nouvelle intervention"""
+    try:
+        # Récupérer l'ID de l'utilisateur et les claims du token
+        user_id = get_jwt_identity()
+        claims = get_jwt()
+        
+        if not user_id:
+            logger.error("No user identity found in JWT token")
+            return jsonify({
+                'success': False,
+                'message': 'Token invalide ou expiré'
+            }), 401
+
+        user_role = claims.get('role')
+        if not user_role:
+            logger.error(f"Invalid user data in JWT token: {claims}")
+            return jsonify({
+                'success': False,
+                'message': 'Données utilisateur invalides'
+            }), 401
+
+        # Récupérer les données de la requête
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                'success': False,
+                'message': 'Aucune donnée fournie'
+            }), 400
+
+        # Vérifier les champs obligatoires
+        required_fields = ['patient_id', 'dispositif_id', 'type_intervention']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({
+                    'success': False,
+                    'message': f'Champ obligatoire manquant: {field}'
+                }), 400
+
+        # Créer l'intervention
+        intervention = Intervention(
+            patient_id=data['patient_id'],
+            dispositif_id=data['dispositif_id'],
+            technicien_id=user_id if user_role == 'technicien' else data.get('technicien_id'),
+            type_intervention=data['type_intervention'],
+            statut=data.get('statut', 'EN_COURS'),
+            commentaire=data.get('commentaire'),
+            traitement=data.get('traitement'),
+            parametres=data.get('parametres', {})
+        )
+
+        # Créer les réglages si fournis
+        if 'reglage' in data:
+            from modeles.reglage import Reglage
+            reglage_data = data['reglage']
+            nouveau_reglage = Reglage(
+                dispositif_id=data['dispositif_id'],
+                pmax=reglage_data.get('pmax'),
+                pmin=reglage_data.get('pmin'),
+                pramp=reglage_data.get('pramp'),
+                hu=reglage_data.get('hu'),
+                re=reglage_data.get('re'),
+                commentaire=reglage_data.get('commentaire')
+            )
+            db.session.add(nouveau_reglage)
+            intervention.reglage = nouveau_reglage
+
+        # Sauvegarder l'intervention
+        db.session.add(intervention)
+        db.session.commit()
+
+        logger.info(f"Intervention créée avec succès par l'utilisateur {user_id}")
+        return jsonify({
+            'success': True,
+            'message': 'Intervention créée avec succès',
+            'data': intervention.to_dict()
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error creating intervention: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({
+            'success': False,
+            'message': 'Erreur lors de la création de l\'intervention',
+            'error': str(e)
+        }), 500
+
+@interventions_bp.route('/<int:intervention_id>', methods=['PUT'])
+@jwt_required()
+def modifier_intervention(intervention_id):
+    """Modifier une intervention existante"""
+    try:
+        # Récupérer l'ID de l'utilisateur et les claims du token
+        user_id = get_jwt_identity()
+        claims = get_jwt()
+        
+        logger.info(f"Tentative de mise à jour de l'intervention {intervention_id} par l'utilisateur {user_id}")
+        
+        if not user_id:
+            logger.error("No user identity found in JWT token")
+            return jsonify({
+                'success': False,
+                'message': 'Token invalide ou expiré'
+            }), 401
+
+        user_role = claims.get('role')
+        if not user_role:
+            logger.error(f"Invalid user data in JWT token: {claims}")
+            return jsonify({
+                'success': False,
+                'message': 'Données utilisateur invalides'
+            }), 401
+
+        # Récupérer l'intervention
+        intervention = Intervention.query.get_or_404(intervention_id)
+        logger.info(f"Intervention trouvée: {intervention.to_dict()}")
+        
+        # Vérifier les permissions
+        if user_role == 'technicien':
+            if str(intervention.technicien_id) != str(user_id):
+                logger.error(f"Tentative non autorisée de modification par le technicien {user_id}")
+                return jsonify({
+                    'success': False,
+                    'message': 'Vous n\'êtes pas autorisé à modifier cette intervention'
+                }), 403
+        elif user_role != 'admin':
+            logger.error(f"Rôle non autorisé: {user_role}")
+            return jsonify({
+                'success': False,
+                'message': 'Rôle non autorisé'
+            }), 403
+
+        # Récupérer les données de la requête
+        data = request.get_json()
+        if not data:
+            logger.error("Aucune donnée fournie dans la requête")
+            return jsonify({
+                'success': False,
+                'message': 'Aucune donnée fournie'
+            }), 400
+
+        logger.info(f"Données reçues pour la mise à jour: {data}")
+
+        # Mettre à jour les champs de l'intervention
+        for field in ['type_intervention', 'statut', 'commentaire', 'traitement']:
+            if field in data:
+                old_value = getattr(intervention, field)
+                setattr(intervention, field, data[field])
+                logger.info(f"Champ {field} mis à jour: {old_value} -> {data[field]}")
+
+        # Mettre à jour les paramètres si fournis
+        if 'parametres' in data:
+            old_params = intervention.parametres
+            intervention.parametres = data['parametres']
+            logger.info(f"Paramètres mis à jour: {old_params} -> {data['parametres']}")
+
+        # Mettre à jour les réglages si fournis
+        if 'reglage' in data:
+            reglage_data = data['reglage']
+            logger.info(f"Données de réglage reçues: {reglage_data}")
+            
+            if intervention.reglage:
+                # Mettre à jour les réglages existants
+                logger.info(f"Réglages existants avant mise à jour: {intervention.reglage.to_dict()}")
+                for field in ['pmax', 'pmin', 'pramp', 'hu', 're', 'commentaire']:
+                    if field in reglage_data:
+                        old_value = getattr(intervention.reglage, field)
+                        new_value = reglage_data[field]
+                        setattr(intervention.reglage, field, new_value)
+                        logger.info(f"Champ {field} mis à jour: {old_value} -> {new_value}")
+                logger.info(f"Réglages après mise à jour: {intervention.reglage.to_dict()}")
+            else:
+                # Créer de nouveaux réglages
+                from modeles.reglage import Reglage
+                logger.info("Création de nouveaux réglages")
+                nouveau_reglage = Reglage(
+                    dispositif_id=intervention.dispositif_id,
+                    pmax=reglage_data.get('pmax'),
+                    pmin=reglage_data.get('pmin'),
+                    pramp=reglage_data.get('pramp'),
+                    hu=reglage_data.get('hu'),
+                    re=reglage_data.get('re'),
+                    commentaire=reglage_data.get('commentaire')
+                )
+                logger.info(f"Nouveaux réglages créés: {nouveau_reglage.to_dict()}")
+                db.session.add(nouveau_reglage)
+                intervention.reglage = nouveau_reglage
+
+        # Sauvegarder les modifications
+        try:
+            db.session.commit()
+            logger.info(f"Intervention {intervention_id} modifiée avec succès par le technicien {user_id}")
+            logger.info(f"État final des réglages: {intervention.reglage.to_dict() if intervention.reglage else None}")
+            return jsonify({
+                'success': True,
+                'message': 'Intervention mise à jour avec succès',
+                'data': intervention.to_dict()
+            }), 200
+        except Exception as commit_error:
+            db.session.rollback()
+            logger.error(f"Erreur lors du commit: {str(commit_error)}\n{traceback.format_exc()}")
+            raise
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error updating intervention: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({
+            'success': False,
+            'message': 'Erreur lors de la mise à jour de l\'intervention',
+            'error': str(e)
+        }), 500
+
+@interventions_bp.route('/<int:intervention_id>', methods=['DELETE'])
+@jwt_required()
+def supprimer_intervention(intervention_id):
+    """Supprimer une intervention"""
+    try:
+        # Récupérer l'ID de l'utilisateur et les claims du token
+        user_id = get_jwt_identity()
+        claims = get_jwt()
+        
+        if not user_id:
+            logger.error("No user identity found in JWT token")
+            return jsonify({
+                'success': False,
+                'message': 'Token invalide ou expiré'
+            }), 401
+
+        user_role = claims.get('role')
+        if not user_role:
+            logger.error(f"Invalid user data in JWT token: {claims}")
+            return jsonify({
+                'success': False,
+                'message': 'Données utilisateur invalides'
+            }), 401
+
+        # Récupérer l'intervention
+        intervention = Intervention.query.get(intervention_id)
+        if not intervention:
+            return jsonify({
+                'success': False,
+                'message': 'Intervention non trouvée'
+            }), 404
+
+        # Vérifier les permissions
+        if user_role == 'technicien' and intervention.technicien_id != user_id:
+            return jsonify({
+                'success': False,
+                'message': 'Vous n\'êtes pas autorisé à supprimer cette intervention'
+            }), 403
+
+        # Supprimer l'intervention
+        try:
+            db.session.delete(intervention)
+            db.session.commit()
+            logger.info(f"Intervention {intervention_id} supprimée avec succès")
+            return jsonify({
+                'success': True,
+                'message': 'Intervention supprimée avec succès'
+            }), 200
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Erreur lors de la suppression de l'intervention: {str(e)}\n{traceback.format_exc()}")
+            return jsonify({
+                'success': False,
+                'message': 'Erreur lors de la suppression de l\'intervention',
+                'error': str(e)
+            }), 500
+
+    except Exception as e:
+        logger.error(f"Erreur non gérée: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({
+            'success': False,
+            'message': 'Erreur lors de la suppression de l\'intervention',
+            'error': str(e)
+        }), 500
+
+@interventions_bp.route('/<int:intervention_id>/reglages', methods=['PUT'])
+@jwt_required()
+def mettre_a_jour_reglages(intervention_id):
+    """Met à jour les réglages d'une intervention"""
+    try:
+        # Récupérer l'intervention
+        intervention = Intervention.query.get_or_404(intervention_id)
+        
+        # Vérifier les permissions
+        user_id = get_jwt_identity()
+        claims = get_jwt()
+        user_role = claims.get('role')
+        
+        if user_role == 'technicien' and intervention.technicien_id != user_id:
+            return jsonify({
+                'success': False,
+                'message': 'Non autorisé à modifier cette intervention'
+            }), 403
+            
+        # Récupérer les données des réglages
+        data = request.get_json()
+        reglage_data = data.get('reglage', {})
+        
+        # Créer ou mettre à jour les réglages
+        if not intervention.reglage:
+            from modeles.reglage import Reglage
+            intervention.reglage = Reglage(
+                dispositif_id=intervention.dispositif_id,
+                pmax=reglage_data.get('pmax'),
+                pmin=reglage_data.get('pmin'),
+                pramp=reglage_data.get('pramp'),
+                hu=reglage_data.get('hu'),
+                re=reglage_data.get('re'),
+                commentaire=reglage_data.get('commentaire')
+            )
+        else:
+            intervention.reglage.pmax = reglage_data.get('pmax', intervention.reglage.pmax)
+            intervention.reglage.pmin = reglage_data.get('pmin', intervention.reglage.pmin)
+            intervention.reglage.pramp = reglage_data.get('pramp', intervention.reglage.pramp)
+            intervention.reglage.hu = reglage_data.get('hu', intervention.reglage.hu)
+            intervention.reglage.re = reglage_data.get('re', intervention.reglage.re)
+            intervention.reglage.commentaire = reglage_data.get('commentaire', intervention.reglage.commentaire)
+        
+        # Sauvegarder les modifications
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Réglages mis à jour avec succès',
+            'data': intervention.reglage.to_dict() if intervention.reglage else None
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erreur lors de la mise à jour des réglages: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({
+            'success': False,
+            'message': 'Erreur lors de la mise à jour des réglages',
+            'error': str(e)
+        }), 500

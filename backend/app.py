@@ -1,8 +1,16 @@
 import os
+import sys
 from flask import Flask, jsonify
 from flask_cors import CORS
 from extensions import init_app
 from config import config
+import logging
+from logging.handlers import RotatingFileHandler
+from flask_jwt_extended import JWTManager
+
+# Ajouter le dossier courant au PYTHONPATH
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, current_dir)
 
 def creer_app(nom_config=None):
     """Fonction factory pour créer l'application Flask"""
@@ -12,15 +20,35 @@ def creer_app(nom_config=None):
     app = Flask(__name__)
     app.config.from_object(config[nom_config])
     
+    # Configuration des logs
+    if not os.path.exists('logs'):
+        os.mkdir('logs')
+    file_handler = RotatingFileHandler('logs/app.log', maxBytes=10240, backupCount=10)
+    file_handler.setFormatter(logging.Formatter(
+        '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'
+    ))
+    file_handler.setLevel(logging.INFO)
+    app.logger.addHandler(file_handler)
+    app.logger.setLevel(logging.INFO)
+    app.logger.info('Application démarrée')
+    
     app.url_map.strict_slashes = False
     
-    CORS(app, 
-         origins=["http://localhost:3000", "http://127.0.0.1:3000"],
-         methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-         allow_headers=['Content-Type', 'Authorization'],
-         supports_credentials=True)
+    CORS(app, resources={
+        r"/*": {
+            "origins": ["http://localhost:3000"],
+             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization", "Accept", "Origin", "X-Requested-With"],
+             "expose_headers": ["Content-Type", "Authorization"],
+             "supports_credentials": True,
+             "max_age": 3600
+        }
+    })
     
     init_app(app)
+    
+    # Initialisation des extensions
+    JWTManager(app)
     
     # Enregistrement des blueprints
     from routes.auth import auth_bp
