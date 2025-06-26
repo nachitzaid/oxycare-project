@@ -259,7 +259,7 @@ export function FormulaireIntervention({ interventionId, mode }: FormulaireInter
                 <PopoverContent>
                   <Calendar
                   value={formData.date_planifiee}
-                  onChange={(value: CalendarValue, _event) => {
+                  onChange={(value: CalendarValue, _event: React.SyntheticEvent) => {
                     const date = Array.isArray(value) ? value[0] : value;
                     handleChange('date_planifiee', date);
                   }}
