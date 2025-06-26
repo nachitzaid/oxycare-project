@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { Input } from "@/components/ui/input";
@@ -41,7 +41,7 @@ const STATUT_LABELS = {
 };
 
 export function ListeInterventions() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const { toast } = useToast();
   const [interventions, setInterventions] = useState<Intervention[]>([]);
   const [loading, setLoading] = useState(true);
@@ -101,7 +101,7 @@ export function ListeInterventions() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Interventions</h2>
-        <Button onClick={() => navigate('/interventions/nouvelle')}>
+        <Button onClick={() => router.push('/interventions/nouvelle')}>
           <Plus className="h-4 w-4 mr-2" />
           Nouvelle intervention
         </Button>
@@ -177,7 +177,7 @@ export function ListeInterventions() {
                   <TableCell className="text-right">
                     <Button
                       variant="ghost"
-                      onClick={() => navigate(`/interventions/${intervention.id}`)}
+                      onClick={() => router.push(`/interventions/${intervention.id}`)}
                     >
                       Voir détails
                     </Button>
@@ -190,4 +190,4 @@ export function ListeInterventions() {
       )}
     </div>
   );
-} 
+}

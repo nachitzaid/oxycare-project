@@ -8,34 +8,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import DeviceForm from "./DeviceForm";
 import DeviceDetails from "./DeviceDetails";
 import Modal from "../common/Modal";
+import type { DispositifMedical, Patient } from '@/types';
 
 // Types
-interface Patient {
-  id: number;
-  code_patient: string;
-  nom: string;
-  prenom: string;
-  telephone?: string;
-  email?: string;
-  ville?: string;
-}
-
-interface DispositifMedical {
-  id: number;
-  patient_id: number | null;
-  designation: string;
-  reference: string;
-  numero_serie: string;
-  type_acquisition: string;
-  date_acquisition: string | null;
-  date_fin_garantie: string | null;
-  duree_location: number | null;
-  date_fin_location: string | null;
-  statut: string;
-  est_sous_garantie?: boolean;
-  patient?: Patient;
-}
-
 interface ApiResponse {
   success?: boolean;
   data?: any;
@@ -113,13 +88,16 @@ const DeviceManagement = () => {
           designation: device.designation || "N/A",
           reference: device.reference || "",
           numero_serie: device.numero_serie || "",
-          type_acquisition: device.type_acquisition || "achat_garantie",
+          type_acquisition: (['location', 'achat_garantie', 'achat_externe', 'achat_oxylife'].includes(device.type_acquisition)
+            ? device.type_acquisition
+            : 'achat_garantie') as 'location' | 'achat_garantie' | 'achat_externe' | 'achat_oxylife',
           date_acquisition: device.date_acquisition || null,
           date_fin_garantie: device.date_fin_garantie || null,
           duree_location: device.duree_location || null,
           date_fin_location: device.date_fin_location || null,
           statut: device.statut || "actif",
           est_sous_garantie: device.est_sous_garantie || false,
+          est_location_active: device.est_location_active || false,
           patient: device.patient || null,
         }));
 
@@ -153,12 +131,19 @@ const DeviceManagement = () => {
   };
 
   // Create device
-  const handleCreateDevice = async (deviceData: Partial<DispositifMedical>) => {
+  const handleCreateDevice = async (deviceData: Partial<import('@/types').DispositifMedical>) => {
+    const allowedTypes = ['location', 'achat_garantie', 'achat_externe', 'achat_oxylife'];
+    const safeDeviceData = {
+      ...deviceData,
+      type_acquisition: allowedTypes.includes(deviceData.type_acquisition as string)
+        ? deviceData.type_acquisition
+        : 'achat_garantie',
+    } as Partial<import('@/types').DispositifMedical>;
     try {
-      console.log("Données envoyées pour création:", deviceData); // Log pour débogage
+      console.log("Données envoyées pour création:", safeDeviceData); // Log pour débogage
       const response = await makeRequest("/dispositifs", {
         method: "POST",
-        body: JSON.stringify(deviceData),
+        body: JSON.stringify(safeDeviceData),
       });
 
       if (response.success) {
@@ -174,14 +159,20 @@ const DeviceManagement = () => {
   };
 
   // Edit device
-  const handleEditDevice = async (deviceData: Partial<DispositifMedical>) => {
+  const handleEditDevice = async (deviceData: Partial<import('@/types').DispositifMedical>) => {
     if (!editingDevice) return;
-
+    const allowedTypes = ['location', 'achat_garantie', 'achat_externe', 'achat_oxylife'];
+    const safeDeviceData = {
+      ...deviceData,
+      type_acquisition: allowedTypes.includes(deviceData.type_acquisition as string)
+        ? deviceData.type_acquisition
+        : 'achat_garantie',
+    } as Partial<import('@/types').DispositifMedical>;
     try {
-      console.log("Données envoyées pour modification:", deviceData); // Log pour débogage
+      console.log("Données envoyées pour modification:", safeDeviceData); // Log pour débogage
       const response = await makeRequest(`/dispositifs/${editingDevice.id}`, {
         method: "PUT",
-        body: JSON.stringify(deviceData),
+        body: JSON.stringify(safeDeviceData),
       });
 
       if (response.success) {

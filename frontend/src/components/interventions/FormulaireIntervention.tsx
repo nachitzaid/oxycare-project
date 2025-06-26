@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { Input } from "@/components/ui/input";
@@ -96,7 +96,7 @@ const TYPES_MASQUE = [
 ];
 
 export function FormulaireIntervention({ interventionId, mode }: FormulaireInterventionProps) {
-  const navigate = useNavigate();
+  const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -164,7 +164,7 @@ export function FormulaireIntervention({ interventionId, mode }: FormulaireInter
         description: `L'intervention a été ${mode === 'creation' ? 'créée' : 'modifiée'}`,
       });
 
-      navigate(`/interventions/${data.id}`);
+      router.push(`/interventions/${data.id}`);
     } catch (error) {
       toast({
         title: "Erreur",
@@ -205,7 +205,6 @@ export function FormulaireIntervention({ interventionId, mode }: FormulaireInter
             <div className="space-y-2">
               <Label htmlFor="traitement">Traitement</Label>
               <Select
-                id="traitement"
                 value={formData.traitement}
                 onValueChange={(value) => handleChange('traitement', value)}
               >
@@ -221,7 +220,6 @@ export function FormulaireIntervention({ interventionId, mode }: FormulaireInter
             <div className="space-y-2">
               <Label htmlFor="type_intervention">Type d'intervention</Label>
               <Select
-                id="type_intervention"
                 value={formData.type_intervention}
                 onValueChange={(value) => handleChange('type_intervention', value)}
                 disabled={!formData.traitement}
@@ -239,7 +237,7 @@ export function FormulaireIntervention({ interventionId, mode }: FormulaireInter
             <div className="space-y-2">
               <Label htmlFor="date_planifiee">Date planifiée</Label>
               <Popover>
-                <PopoverTrigger asChild>
+                <PopoverTrigger>
                   <Button
                     variant="outline"
                     className={cn(
@@ -255,12 +253,13 @@ export function FormulaireIntervention({ interventionId, mode }: FormulaireInter
                     )}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
+                <PopoverContent>
                   <Calendar
-                    mode="single"
-                    selected={formData.date_planifiee}
-                    onSelect={(date) => handleChange('date_planifiee', date)}
-                    initialFocus
+                    value={formData.date_planifiee}
+                    onChange={(value) => {
+                      const date = Array.isArray(value) ? value[0] : value;
+                      handleChange('date_planifiee', date);
+                    }}
                   />
                 </PopoverContent>
               </Popover>
@@ -279,7 +278,6 @@ export function FormulaireIntervention({ interventionId, mode }: FormulaireInter
             <div className="space-y-2">
               <Label htmlFor="etat_materiel">État du matériel</Label>
               <Select
-                id="etat_materiel"
                 value={formData.etat_materiel}
                 onValueChange={(value) => handleChange('etat_materiel', value)}
               >
@@ -296,7 +294,6 @@ export function FormulaireIntervention({ interventionId, mode }: FormulaireInter
               <div className="space-y-2">
                 <Label htmlFor="type_concentrateur">Type de concentrateur</Label>
                 <Select
-                  id="type_concentrateur"
                   value={formData.type_concentrateur}
                   onValueChange={(value) => handleChange('type_concentrateur', value)}
                 >
@@ -316,7 +313,6 @@ export function FormulaireIntervention({ interventionId, mode }: FormulaireInter
                 <div className="space-y-2">
                   <Label htmlFor="mode_ventilation">Mode de ventilation</Label>
                   <Select
-                    id="mode_ventilation"
                     value={formData.mode_ventilation}
                     onValueChange={(value) => handleChange('mode_ventilation', value)}
                   >
@@ -332,7 +328,6 @@ export function FormulaireIntervention({ interventionId, mode }: FormulaireInter
                 <div className="space-y-2">
                   <Label htmlFor="type_masque">Type de masque</Label>
                   <Select
-                    id="type_masque"
                     value={formData.type_masque}
                     onValueChange={(value) => handleChange('type_masque', value)}
                   >
@@ -352,7 +347,7 @@ export function FormulaireIntervention({ interventionId, mode }: FormulaireInter
             <Button
               type="button"
               variant="outline"
-              onClick={() => navigate(-1)}
+              onClick={() => router.back()}
             >
               Annuler
             </Button>
@@ -368,4 +363,4 @@ export function FormulaireIntervention({ interventionId, mode }: FormulaireInter
       </Card>
     </form>
   );
-} 
+}

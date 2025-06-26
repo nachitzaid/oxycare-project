@@ -2,26 +2,13 @@
 
 import { X } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
+import type { DispositifMedical } from '@/types';
 
 interface Patient {
   id: number;
   code_patient: string;
   nom: string;
   prenom: string;
-}
-
-interface DispositifMedical {
-  id?: number;
-  patient_id: number | null;
-  designation: string;
-  reference: string;
-  numero_serie: string;
-  type_acquisition: string;
-  date_acquisition: string;
-  date_fin_garantie: string;
-  duree_location: number | null;
-  date_fin_location: string;
-  statut: string;
 }
 
 interface DeviceFormProps {
@@ -40,12 +27,12 @@ const DeviceForm: React.FC<DeviceFormProps> = ({ mode, device, onSubmit, onClose
     designation: '',
     reference: '',
     numero_serie: '',
-    type_acquisition: 'achat_garantie',
+    type_acquisition: 'achat_garantie' as 'location' | 'achat_garantie' | 'achat_externe' | 'achat_oxylife',
     date_acquisition: '',
     date_fin_garantie: '',
     duree_location: null,
     date_fin_location: '',
-    statut: 'actif'
+    statut: 'actif' as 'actif' | 'en_maintenance' | 'retiré',
   });
 
   const API_BASE_URL = "http://localhost:5000/api";
@@ -97,12 +84,16 @@ const DeviceForm: React.FC<DeviceFormProps> = ({ mode, device, onSubmit, onClose
         designation: device.designation,
         reference: device.reference,
         numero_serie: device.numero_serie,
-        type_acquisition: device.type_acquisition,
-        date_acquisition: device.date_acquisition || '',
-        date_fin_garantie: device.date_fin_garantie || '',
+        type_acquisition: (['location', 'achat_garantie', 'achat_externe', 'achat_oxylife'].includes(device.type_acquisition)
+          ? device.type_acquisition
+          : 'achat_garantie') as 'location' | 'achat_garantie' | 'achat_externe' | 'achat_oxylife',
+        date_acquisition: device.date_acquisition,
+        date_fin_garantie: device.date_fin_garantie,
         duree_location: device.duree_location,
-        date_fin_location: device.date_fin_location || '',
-        statut: device.statut
+        date_fin_location: device.date_fin_location,
+        statut: (['actif', 'en_maintenance', 'retiré'].includes(device.statut)
+          ? device.statut
+          : 'actif') as 'actif' | 'en_maintenance' | 'retiré',
       });
     }
   }, [device, mode]);
@@ -147,10 +138,17 @@ const DeviceForm: React.FC<DeviceFormProps> = ({ mode, device, onSubmit, onClose
 
       // Remove empty fields except patient_id and duree_location
       Object.keys(submitData).forEach(key => {
-        if (submitData[key] === '' && key !== 'patient_id' && key !== 'duree_location') {
-          delete submitData[key];
+        if ((submitData as any)[key] === '' && key !== 'patient_id' && key !== 'duree_location') {
+          delete (submitData as any)[key];
         }
       });
+
+      // Force le type pour type_acquisition
+      const allowedTypes = ['location', 'achat_garantie', 'achat_externe', 'achat_oxylife'];
+      if (submitData.type_acquisition && !allowedTypes.includes(submitData.type_acquisition as string)) {
+        submitData.type_acquisition = 'achat_garantie';
+      }
+      submitData.type_acquisition = submitData.type_acquisition as 'location' | 'achat_garantie' | 'achat_externe' | 'achat_oxylife' | undefined;
 
       await onSubmit(submitData);
       onClose(); // Close modal on success

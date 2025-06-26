@@ -112,7 +112,6 @@ export function TechnicianInterventionDetails({ intervention, onUpdate, onDelete
 
       const dataToSubmit: InterventionUpdateData = {
         ...formData,
-        id: intervention.id,
         reglage: {
           pmax: formData.reglage.pmax ? parseFloat(formData.reglage.pmax) : null,
           pmin: formData.reglage.pmin ? parseFloat(formData.reglage.pmin) : null,
@@ -595,4 +594,4 @@ export function TechnicianInterventionDetails({ intervention, onUpdate, onDelete
       </CardContent>
     </Card>
   );
-} 
+}

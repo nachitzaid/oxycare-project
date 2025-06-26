@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { Input } from "@/components/ui/input";
@@ -41,7 +41,7 @@ const STATUT_LABELS = {
 };
 
 export function RechercheInterventions() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const { toast } = useToast();
   const [recherche, setRecherche] = useState("");
   const [type, setType] = useState("tout");
@@ -134,7 +134,7 @@ export function RechercheInterventions() {
             <div
               key={intervention.id}
               className="p-4 rounded-lg border hover:bg-gray-50 cursor-pointer"
-              onClick={() => navigate(`/interventions/${intervention.id}`)}
+              onClick={() => router.push(`/interventions/${intervention.id}`)}
             >
               <div className="flex items-start justify-between">
                 <div className="space-y-1">
@@ -160,4 +160,4 @@ export function RechercheInterventions() {
       ) : null}
     </div>
   );
-} 
+}

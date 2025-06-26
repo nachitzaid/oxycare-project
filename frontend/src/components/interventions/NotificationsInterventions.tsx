@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { Badge } from "@/components/ui/badge";
@@ -31,7 +31,7 @@ const TYPE_LABELS = {
 };
 
 export function NotificationsInterventions() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const { toast } = useToast();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -184,7 +184,7 @@ export function NotificationsInterventions() {
                 <Button
                   variant="link"
                   className="mt-2 p-0 h-auto text-sm"
-                  onClick={() => navigate(`/interventions/${notification.intervention_id}`)}
+                  onClick={() => router.push(`/interventions/${notification.intervention_id}`)}
                 >
                   Voir l'intervention
                 </Button>
@@ -195,4 +195,4 @@ export function NotificationsInterventions() {
       </div>
     </div>
   );
-} 
+}

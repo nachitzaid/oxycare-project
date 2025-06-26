@@ -277,7 +277,7 @@ export function NouvelleIntervention() {
           <div className="space-y-2">
             <Label>Date planifiée</Label>
             <Popover>
-              <PopoverTrigger asChild>
+              <PopoverTrigger>
                 <Button
                   variant={"outline"}
                   className={cn(
@@ -289,14 +289,18 @@ export function NouvelleIntervention() {
                   {date ? format(date, "PPP", { locale: fr }) : "Sélectionnez une date"}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0">
-                <Calendar
-                  mode="single"
-                  selected={date}
-                  onSelect={setDate}
-                  initialFocus
-                  locale={fr}
-                />
+              <PopoverContent>
+                <div className="w-auto p-0">
+                  <Calendar
+                    value={date}
+                    onChange={(val: any) => {
+                      if (val instanceof Date) setDate(val);
+                      else if (Array.isArray(val) && val[0] instanceof Date) setDate(val[0]);
+                      else setDate(undefined);
+                    }}
+                    locale="fr-FR"
+                  />
+                </div>
               </PopoverContent>
             </Popover>
           </div>
@@ -331,4 +335,4 @@ export function NouvelleIntervention() {
       </CardContent>
     </Card>
   );
-} 
+}

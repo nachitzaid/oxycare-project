@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { X } from "lucide-react";
+import type { Intervention } from '@/types/intervention';
 
 interface Patient {
   id: number;
@@ -23,24 +24,6 @@ interface User {
   nom: string;
   prenom: string;
   role: string;
-}
-
-interface Intervention {
-  id?: number;
-  patient_id: number;
-  dispositif_id: number;
-  technicien_id: number;
-  type_intervention: string;
-  planifiee: boolean;
-  date_planifiee: string | null;
-  date_reelle: string | null;
-  temps_prevu: number | null;
-  temps_reel: number | null;
-  actions_effectuees: string | null;
-  satisfaction_technicien: number | null;
-  signature_patient: boolean;
-  signature_responsable: boolean;
-  commentaire: string | null;
 }
 
 interface InterventionFormProps {
@@ -68,10 +51,8 @@ const InterventionForm: React.FC<InterventionFormProps> = ({ mode, intervention,
     date_reelle: "",
     temps_prevu: 60,
     temps_reel: null,
-    actions_effectuees: "",
+    actions_effectuees: {}, // Correction: Record<string, any>
     satisfaction_technicien: null,
-    signature_patient: false,
-    signature_responsable: false,
     commentaire: "",
   });
 
@@ -127,10 +108,8 @@ const InterventionForm: React.FC<InterventionFormProps> = ({ mode, intervention,
         date_reelle: intervention.date_reelle ? intervention.date_reelle.slice(0, 16) : "",
         temps_prevu: intervention.temps_prevu,
         temps_reel: intervention.temps_reel,
-        actions_effectuees: intervention.actions_effectuees || "",
+        actions_effectuees: intervention.actions_effectuees || {},
         satisfaction_technicien: intervention.satisfaction_technicien,
-        signature_patient: intervention.signature_patient,
-        signature_responsable: intervention.signature_responsable,
         commentaire: intervention.commentaire || "",
       });
       if (intervention.patient_id) {
@@ -254,14 +233,12 @@ const InterventionForm: React.FC<InterventionFormProps> = ({ mode, intervention,
         patient_id: Number(formData.patient_id),
         dispositif_id: Number(formData.dispositif_id),
         technicien_id: formData.technicien_id ? Number(formData.technicien_id) : undefined,
-        temps_prevu: formData.temps_prevu ? Number(formData.temps_prevu) : null,
-        temps_reel: formData.temps_reel ? Number(formData.temps_reel) : null,
+        temps_prevu: formData.temps_prevu ? Number(formData.temps_prevu) : undefined, // Correction: undefined au lieu de null
+        temps_reel: formData.temps_reel ? Number(formData.temps_reel) : undefined, // Correction: undefined au lieu de null
         satisfaction_technicien: formData.satisfaction_technicien
           ? Number(formData.satisfaction_technicien)
           : null,
-        date_planifiee: formData.date_planifiee
-          ? new Date(formData.date_planifiee).toISOString()
-          : null,
+        date_planifiee: formData.date_planifiee || undefined, // Correction: date_planifiee doit être string | undefined (jamais null)
         date_reelle: formData.date_reelle
           ? new Date(formData.date_reelle).toISOString()
           : null,
@@ -480,7 +457,7 @@ const InterventionForm: React.FC<InterventionFormProps> = ({ mode, intervention,
             </label>
             <textarea
               name="actions_effectuees"
-              value={formData.actions_effectuees || ""}
+              value={typeof formData.actions_effectuees === 'string' ? formData.actions_effectuees : JSON.stringify(formData.actions_effectuees) || ""}
               onChange={handleChange}
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
               rows={4}
@@ -554,34 +531,6 @@ const InterventionForm: React.FC<InterventionFormProps> = ({ mode, intervention,
                     </option>
                   ))}
                 </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Signature patient
-                </label>
-                <input
-                  type="checkbox"
-                  name="signature_patient"
-                  checked={formData.signature_patient ?? false}
-                  onChange={handleChange}
-                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                  disabled={loading}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Signature responsable
-                </label>
-                <input
-                  type="checkbox"
-                  name="signature_responsable"
-                  checked={formData.signature_responsable ?? false}
-                  onChange={handleChange}
-                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                  disabled={loading}
-                />
               </div>
             </div>
           )}

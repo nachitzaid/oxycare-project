@@ -15,7 +15,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import Modal from "../common/Modal";
 import InterventionForm from "./InterventionForm";
 import InterventionDetails from "./InterventionDetails";
-import { Intervention, InterventionStatus } from '@/types/intervention';
+import type { Intervention, InterventionStatus } from '@/types/intervention';
+import type { Patient } from '@/types';
 import { useToast } from '@/components/ui/use-toast';
 import { InterventionList } from './InterventionList'; 
 
@@ -90,10 +91,9 @@ const InterventionManagementAdmin = () => {
   useEffect(() => {
     const timer = setTimeout(() => {
       if (searchTerm) {
-        fetchInterventions(1, pagination.perPage, { recherche: searchTerm });
+        fetchInterventions(1, Number(pagination.perPage), { recherche: searchTerm });
       }
     }, 300);
-
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
@@ -106,14 +106,14 @@ const InterventionManagementAdmin = () => {
         date_intervention: interventionData.date_planifiee!,
         type_intervention: interventionData.type_intervention!,
         technicien_id: interventionData.technicien_id,
-        statut: interventionData.planifiee ? "planifiée" : "en cours",
+        statut: interventionData.planifiee ? "planifiee" : "en_cours",
         description: interventionData.commentaire || undefined,
         notes: interventionData.commentaire || undefined
       });
 
       if (result) {
         setShowCreateModal(false);
-        await fetchInterventions(searchTerm);
+        await fetchInterventions(1, Number(pagination.perPage), { recherche: searchTerm });
       }
     } catch (err) {
       console.error("Erreur lors de la création:", err);
@@ -199,7 +199,7 @@ const InterventionManagementAdmin = () => {
             </p>
           </div>
           <div className="flex gap-2">
-            <Button onClick={() => fetchInterventions(searchTerm)} disabled={loading} variant="outline" className="flex items-center gap-2">
+            <Button onClick={() => fetchInterventions(1, Number(pagination.perPage), { recherche: searchTerm })} disabled={loading} variant="outline" className="flex items-center gap-2">
               <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
               Actualiser
             </Button>
@@ -311,7 +311,7 @@ const InterventionManagementAdmin = () => {
           <InterventionForm
             mode="edit"
             intervention={editingIntervention}
-            onSubmit={handleUpdate}
+            onSubmit={handleUpdate as any}
             onClose={() => setEditingIntervention(null)}
           />
         </Modal>

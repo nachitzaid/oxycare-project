@@ -81,14 +81,17 @@ const InterventionManagementTechnician = () => {
     });
   };
 
-  const handleUpdate = async (interventionData: Partial<Intervention> & { id: number }) => {
+  const handleUpdate = async (interventionData: Partial<Intervention>) => {
     if (!user?.id) return;
     try {
+      // S'assurer que l'objet passé à updateIntervention contient bien un id
+      if (!interventionData.id) {
+        showMessage("L'intervention doit avoir un id pour être modifiée", "error");
+        return;
+      }
       const response = await updateIntervention({
         ...interventionData,
         technicien_id: user.id,
-        signature_patient: interventionData.signature_patient ?? null,
-        signature_responsable: interventionData.signature_responsable ?? null,
       } as Intervention);
       if (response.success) {
         showMessage("Intervention mise à jour avec succès", "success");
@@ -164,13 +167,13 @@ const InterventionManagementTechnician = () => {
       {editingIntervention && (
           <InterventionForm
             mode="edit"
-            intervention={editingIntervention}
-          onSubmit={handleUpdate}
+            intervention={editingIntervention as Intervention}
+            onSubmit={handleUpdate}
             onClose={() => setEditingIntervention(null)}
-        />
+          />
       )}
     </div>
   );
 };
 
-export default InterventionManagementTechnician; 
+export default InterventionManagementTechnician;

@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Modal from "../common/Modal";
 import InterventionDetails from "../interventions/InterventionDetails";
+import type { Intervention } from '@/types/intervention';
 
 // Types
 interface Patient {
@@ -19,28 +20,6 @@ interface Patient {
   prenom: string;
   telephone?: string;
   email?: string;
-}
-
-interface Intervention {
-  id: number;
-  patient_id: number;
-  dispositif_id: number;
-  technicien_id: number;
-  type_intervention: string;
-  planifiee: boolean;
-  date_planifiee: string | null;
-  date_reelle: string | null;
-  temps_prevu: number | null;
-  temps_reel: number | null;
-  actions_effectuees: any;
-  satisfaction_technicien: number | null;
-  signature_patient: boolean;
-  signature_responsable: boolean;
-  commentaire: string | null;
-  date_creation: string | null;
-  patient?: Patient;
-  dispositif?: any;
-  technicien?: any;
 }
 
 const ReminderManagement = () => {
@@ -73,7 +52,7 @@ const ReminderManagement = () => {
   useEffect(() => {
     const timer = setTimeout(() => {
       if (searchTerm) {
-        fetchInterventions(searchTerm);
+        fetchInterventions(1, 10, { recherche: searchTerm });
       }
     }, 300);
 
@@ -158,7 +137,7 @@ const ReminderManagement = () => {
             >
               Cette semaine
             </Button>
-            <Button onClick={() => fetchInterventions(searchTerm)} disabled={loading} variant="outline" className="flex items-center gap-2">
+            <Button onClick={() => fetchInterventions(1, 10, { recherche: searchTerm })} disabled={loading} variant="outline" className="flex items-center gap-2">
               <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
               Actualiser
             </Button>
@@ -280,4 +259,4 @@ const ReminderManagement = () => {
   );
 };
 
-export default ReminderManagement; 
+export default ReminderManagement;

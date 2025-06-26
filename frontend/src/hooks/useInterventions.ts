@@ -1,39 +1,7 @@
 // hooks/useInterventions.ts
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/app/contexts/AuthContext";
-
-interface Intervention {
-  id: number;
-  patient_id: number;
-  dispositif_id: number;
-  technicien_id: number;
-  reglage_id: number | null;
-  traitement: string;
-  type_intervention: string;
-  date_planifiee: string;
-  date_reelle: string | null;
-  lieu: string;
-  etat_materiel: string | null;
-  type_concentrateur: string | null;
-  mode_ventilation: string | null;
-  type_masque: string | null;
-  statut: string;
-  actions_effectuees: any;
-  accessoires_utilises: any;
-  photos: any;
-  signature_technicien: string | null;
-  rapport_pdf_url: string | null;
-  parametres: any;
-  remarques: string | null;
-  motif_annulation: string | null;
-  date_reprogrammation: string | null;
-  date_creation: string;
-  date_modification: string;
-  patient?: any;
-  dispositif?: any;
-  technicien?: any;
-  reglage?: any;
-}
+import type { Intervention } from '@/types/intervention';
 
 interface InterventionFormData {
   patient_id: number;
@@ -354,6 +322,7 @@ export const useInterventions = () => {
     createIntervention,
     updateIntervention,
     deleteIntervention,
-    showMessage
+    showMessage,
+    makeRequest
   };
 };

@@ -121,11 +121,11 @@ const AdminStatistics = () => {
       
       if (patientsData.success && dispositivesData.success) {
         // Traitement des données patients
-        const patients = patientsData.patients || [];
+        const patients: Patient[] = patientsData.patients || [];
         const patientsParMois = processPatientsByMonth(patients);
         const patientsParVille = processPatientsByCity(patients);
         const nouveauxCeMois = countNewPatientsThisMonth(patients);
-        const avecDispositifs = patients.filter(p => p.dispositifs?.length > 0).length;
+        const avecDispositifs = patients.filter((p) => Array.isArray(p.dispositifs) && p.dispositifs.length > 0).length;
         
         setStats({
           patients: {

@@ -35,19 +35,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import type { Intervention } from '@/types/intervention';
+import type { Patient } from '@/types/index';
 
 // Types basés sur votre structure de données réelle
-interface Patient {
-  id: number;
-  code_patient: string;
-  nom: string;
-  prenom: string;
-  telephone?: string;
-  email?: string;
-  adresse?: string;
-  ville?: string;
-}
-
 interface DispositifMedical {
   id: number;
   designation: string;
@@ -63,33 +54,11 @@ interface Utilisateur {
   email?: string;
 }
 
-interface Intervention {
-  id: number;
-  patient_id: number;
-  dispositif_id: number;
-  technicien_id: number;
-  type_intervention: string;
-  planifiee: boolean;
-  date_planifiee: string | null;
-  date_reelle: string | null;
-  temps_prevu: number | null;
-  temps_reel: number | null;
-  actions_effectuees: string | null;
-  satisfaction_technicien: number | null;
-  signature_patient: boolean;
-  signature_responsable: boolean;
-  commentaire: string | null;
-  date_creation: string | null;
-  patient?: Patient;
-  dispositif?: DispositifMedical;
-  technicien?: Utilisateur;
-}
-
 interface InterventionDetailsProps {
-  intervention: Intervention | null
-  onClose: () => void
-  onEdit?: (intervention: Intervention) => void
-  onDelete?: (interventionId: number) => Promise<void>
+  intervention: Intervention | null;
+  onClose: () => void;
+  onEdit?: (intervention: Intervention) => void;
+  onDelete?: (interventionId: number) => Promise<void>;
 }
 
 const InterventionDetails: React.FC<InterventionDetailsProps> = ({ intervention, onClose, onEdit, onDelete }) => {
@@ -282,14 +251,15 @@ const InterventionDetails: React.FC<InterventionDetailsProps> = ({ intervention,
                       <p className="font-medium">{intervention.patient.email}</p>
                     </div>
                   )}
-                  {intervention.patient.adresse && (
+                  {/* Correction : cast safe pour accès aux propriétés optionnelles Patient (adresse, ville) */}
+                  {('adresse' in intervention.patient!) && (intervention.patient as any).adresse && (
                     <div>
                       <p className="text-sm text-muted-foreground">Adresse</p>
                       <p className="font-medium flex items-start">
                         <MapPin className="h-4 w-4 mr-1 mt-1 text-muted-foreground flex-shrink-0" />
                         <span>
-                          {intervention.patient.adresse}
-                          {intervention.patient.ville && `, ${intervention.patient.ville}`}
+                          {(intervention.patient as any).adresse}
+                          {('ville' in intervention.patient!) && (intervention.patient as any).ville && `, ${(intervention.patient as any).ville}`}
                         </span>
                       </p>
                     </div>
@@ -399,9 +369,10 @@ const InterventionDetails: React.FC<InterventionDetailsProps> = ({ intervention,
                       <h5 className="text-sm font-medium flex items-center mb-2">
                         <ClipboardList className="h-3.5 w-3.5 mr-1" /> Actions effectuées
                       </h5>
-                      <p className="text-sm whitespace-pre-line bg-white dark:bg-gray-800 p-3 rounded border">
-                        {intervention.actions_effectuees}
-                      </p>
+                      {/* Correction : affichage actions_effectuees (Record<string, any>) */}
+                      {intervention.actions_effectuees && typeof intervention.actions_effectuees === 'object'
+                        ? <pre className="whitespace-pre-wrap text-xs">{JSON.stringify(intervention.actions_effectuees, null, 2)}</pre>
+                        : intervention.actions_effectuees}
                     </div>
                   )}
 
@@ -418,34 +389,6 @@ const InterventionDetails: React.FC<InterventionDetailsProps> = ({ intervention,
                       </div>
                     </div>
                   )}
-
-                  {/* Signatures */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-green-200 dark:border-green-800">
-                    <div className="flex items-center gap-2">
-                      <FileSignature className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">Signature patient:</span>
-                      {intervention.signature_patient ? (
-                        <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
-                          <CheckCircle className="h-3 w-3 mr-1" />
-                          Signée
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline">Non signée</Badge>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <UserCheck className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">Signature responsable:</span>
-                      {intervention.signature_responsable ? (
-                        <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
-                          <CheckCircle className="h-3 w-3 mr-1" />
-                          Signée
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline">Non signée</Badge>
-                      )}
-                    </div>
-                  </div>
                 </div>
               )}
             </CardContent>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -82,7 +82,7 @@ const CHART_COLORS = [
 ];
 
 export function DashboardInterventions() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const { toast } = useToast();
   const [statistiques, setStatistiques] = useState<Statistiques | null>(null);
   const [interventionsAujourdhui, setInterventionsAujourdhui] = useState<Intervention[]>([]);
@@ -157,7 +157,7 @@ export function DashboardInterventions() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Tableau de bord</h2>
-        <Button onClick={() => navigate('/interventions/nouvelle')}>
+        <Button onClick={() => router.push('/interventions/nouvelle')}>
           <Plus className="h-4 w-4 mr-2" />
           Nouvelle intervention
         </Button>
@@ -306,7 +306,7 @@ export function DashboardInterventions() {
                 <div
                   key={intervention.id}
                   className="flex items-center justify-between p-4 rounded-lg border hover:bg-gray-50 cursor-pointer"
-                  onClick={() => navigate(`/interventions/${intervention.id}`)}
+                  onClick={() => router.push(`/interventions/${intervention.id}`)}
                 >
                   <div className="space-y-1">
                     <div className="flex items-center space-x-2">
@@ -327,7 +327,7 @@ export function DashboardInterventions() {
                         size="sm"
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(`/interventions/${intervention.id}/demarrer`);
+                          router.push(`/interventions/${intervention.id}/demarrer`);
                         }}
                       >
                         Démarrer
@@ -339,7 +339,7 @@ export function DashboardInterventions() {
                         size="sm"
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(`/interventions/${intervention.id}/terminer`);
+                          router.push(`/interventions/${intervention.id}/terminer`);
                         }}
                       >
                         Terminer
@@ -354,4 +354,4 @@ export function DashboardInterventions() {
       </Card>
     </div>
   );
-} 
+}
