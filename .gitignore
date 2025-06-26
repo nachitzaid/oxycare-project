@@ -13,28 +13,50 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-*.egg-info/
-.installed.cfg
-*.egg
-
-# Flask
+#lib/add frontend/src/lib/axios.ts frontend/src/lib/utils.ts frontend/src/lib/api.ts
+lib64/mmit -m "Ajout des fichiers lib manquants sur main"
+parts/sh origin main
+sdist/llowing paths are ignored by one of your .gitignore files:
+var/tend/src/lib
+*.egg-info/f if you really want to add them.
+.installed.cfgthis message with "git config advice.addIgnoredFile false"
+*.egganch main
+Your branch and 'origin/main' have diverged,
+# Flaske 1 and 1 different commits each, respectively.
 instance/
-.webassets-cache
-logs/
-
-# Environnement
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
+.webassets-cachet, working tree clean
+logs/tps://github.com/nachitzaid/oxycare-project.git
+ ! [rejected]        main -> main (fetch first)
+# Environnemento push some refs to 'https://github.com/nachitzaid/oxycare-project.git'
+.env: Updates were rejected because the remote contains work that you do not
+.env.local locally. This is usually caused by another repository pushing to
+.env.development.local you want to integrate the remote changes, use
+.env.test.local' before pushing again.
+.env.production.localbout fast-forwards' in 'git push --help' for details.lib/
+lib64/
 # Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnp/
+.pnp.js
+# Flask
+# Next.js
+.next/sets-cache
+out//
+
+# Autresnnement
+.DS_Store
+.idea/ocal
+.vscode/elopment.local
+*.swptest.local
+*.swoproduction.local
+
+
+
+
+!src/lib/*!src/lib/# Node
 node_modules/
 npm-debug.log*
 yarn-debug.log*
@@ -52,3 +74,6 @@ out/
 .vscode/
 *.swp
 *.swo
+# Pour forcer l'inclusion du dossier lib du frontend
+!frontend/src/lib/
+!frontend/src/lib/*
