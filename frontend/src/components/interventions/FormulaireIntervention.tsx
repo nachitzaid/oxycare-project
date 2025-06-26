@@ -13,6 +13,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import { CalendarIcon } from "lucide-react";
 
+// Ajout du type compatible avec react-calendar
+export type CalendarValue = Date | [Date, Date] | [Date | null, Date | null] | null;
+
 interface FormulaireInterventionProps {
   interventionId?: number;
   mode: 'creation' | 'modification';
@@ -256,7 +259,7 @@ export function FormulaireIntervention({ interventionId, mode }: FormulaireInter
                 <PopoverContent>
                   <Calendar
                   value={formData.date_planifiee}
-                  onChange={(value, _event) => {
+                  onChange={(value: CalendarValue, _event) => {
                     const date = Array.isArray(value) ? value[0] : value;
                     handleChange('date_planifiee', date);
                   }}
