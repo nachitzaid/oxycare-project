@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, send_file
 from flask_jwt_extended import get_jwt_identity, jwt_required, get_jwt
 from extensions.base_donnees import db
 from modeles.intervention import Intervention
@@ -635,5 +635,45 @@ def statistiques_technicien():
         return jsonify({
             'success': False,
             'message': 'Erreur lors de la récupération des statistiques',
+            'error': str(e)
+        }), 500
+
+@interventions_bp.route('/<int:intervention_id>/generate-document', methods=['POST'])
+@jwt_required()
+def generate_document(intervention_id):
+    """Générer le document PDF d'une intervention"""
+    try:
+        # Récupérer l'intervention
+        intervention = Intervention.query.get_or_404(intervention_id)
+        
+        # Vérifier les permissions
+        user_id = get_jwt_identity()
+        claims = get_jwt()
+        user_role = claims.get('role')
+        
+        # Vérifier que l'utilisateur est un technicien ou un admin
+        if user_role not in ['technicien', 'admin']:
+            return jsonify({
+                'success': False,
+                'message': 'Seuls les techniciens et les administrateurs peuvent générer des documents'
+            }), 403
+
+        # Générer le PDF
+        from utils.pdf_generator import generate_intervention_pdf
+        pdf_data = generate_intervention_pdf(intervention)
+        
+        # Retourner le PDF
+        return send_file(
+            pdf_data,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=f'intervention_{intervention_id}_{datetime.now().strftime("%Y%m%d")}.pdf'
+        )
+
+    except Exception as e:
+        logger.error(f"Erreur lors de la génération du document: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({
+            'success': False,
+            'message': 'Erreur lors de la génération du document',
             'error': str(e)
         }), 500

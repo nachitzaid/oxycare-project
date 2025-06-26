@@ -17,7 +17,7 @@ import InterventionForm from "./InterventionForm";
 import InterventionDetails from "./InterventionDetails";
 import { Intervention, InterventionStatus } from '@/types/intervention';
 import { useToast } from '@/components/ui/use-toast';
-import { InterventionList } from './InterventionList';
+import { InterventionList } from './InterventionList'; 
 
 const InterventionManagementAdmin = () => {
   const { user, isAuthenticated, isAdmin, loading: authLoading } = useAuth();

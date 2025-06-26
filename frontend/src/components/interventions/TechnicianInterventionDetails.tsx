@@ -13,6 +13,12 @@ import { ScrollArea } from "../ui/scroll-area";
 import { Intervention, InterventionFormData, InterventionType, InterventionUpdateData } from '@/types/intervention';
 import { INTERVENTION_TYPES, VERIFICATIONS_SECURITE, TESTS_EFFECTUES, CONSOMMABLES } from '@/constants/interventions';
 import type { InterventionStatus } from '@/types/intervention';
+import { api } from '@/lib/api';
+
+interface Consommable {
+  id: string;
+  name: string;
+}
 
 interface TechnicianInterventionDetailsProps {
   intervention: Intervention;
@@ -305,16 +311,6 @@ export function TechnicianInterventionDetails({ intervention, onUpdate, onDelete
               })}
             />
           </div>
-          <div className="space-y-2 col-span-2">
-            <Label>Commentaire</Label>
-            <Textarea
-              value={formData.reglage.commentaire}
-              onChange={(e) => setFormData({
-                ...formData,
-                reglage: { ...formData.reglage, commentaire: e.target.value }
-              })}
-            />
-          </div>
         </div>
       </div>
     );
@@ -378,64 +374,43 @@ export function TechnicianInterventionDetails({ intervention, onUpdate, onDelete
     );
   };
 
-  const renderConsommables = () => {
-    return (
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold">Consommables utilisés</h3>
-        <div className="grid grid-cols-2 gap-4">
-          {Object.entries(CONSOMMABLES).map(([key, label]) => (
-            <div key={key} className="space-y-2">
-              <Label>{label}</Label>
-              <Input
-                type="number"
-                value={formData.consommables_utilises[key] || 0}
-                onChange={(e) => setFormData({
-                  ...formData,
-                  consommables_utilises: {
-                    ...formData.consommables_utilises,
-                    [key]: parseInt(e.target.value) || 0
-                  }
-                })}
-              />
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
+  const handleGenerateDocument = async () => {
+    try {
+      setLoading(true);
+      const response = await api.fetch(`/api/interventions/${intervention.id}/generate-document`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
 
-  const renderMaintenance = () => {
-    return (
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold">Maintenance</h3>
-        <div className="space-y-4">
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="maintenance_preventive"
-              checked={formData.maintenance_preventive}
-              onCheckedChange={(checked: boolean) => {
-                setFormData({
-                  ...formData,
-                  maintenance_preventive: checked
-                });
-              }}
-            />
-            <Label htmlFor="maintenance_preventive">Maintenance préventive effectuée</Label>
-          </div>
-          <div className="space-y-2">
-            <Label>Date de la prochaine maintenance</Label>
-            <Input
-              type="date"
-              value={formData.date_prochaine_maintenance}
-              onChange={(e) => setFormData({
-                ...formData,
-                date_prochaine_maintenance: e.target.value
-              })}
-            />
-          </div>
-        </div>
-      </div>
-    );
+      if (!response.ok) {
+        throw new Error('Erreur lors de la génération du document');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `intervention_${intervention.id}_${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast({
+        title: "Succès",
+        description: "Le document a été généré et téléchargé avec succès",
+      });
+    } catch (error) {
+      toast({
+        title: "Erreur",
+        description: error instanceof Error ? error.message : "Une erreur est survenue lors de la génération du document",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -443,9 +418,9 @@ export function TechnicianInterventionDetails({ intervention, onUpdate, onDelete
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Détails de l'intervention</CardTitle>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleDownloadPDF} disabled={!intervention?.rapport_pdf_url}>
+          <Button variant="outline" onClick={handleGenerateDocument} disabled={loading}>
             <FileText className="w-4 h-4 mr-2" />
-            Télécharger PDF
+            Générer document
           </Button>
           <Button variant="destructive" onClick={handleDelete}>
             <Trash2 className="w-4 h-4 mr-2" />
@@ -553,8 +528,6 @@ export function TechnicianInterventionDetails({ intervention, onUpdate, onDelete
               <form onSubmit={handleSubmit} className="space-y-6">
                 {renderVerificationsSecurite()}
                 {renderTestsEffectues()}
-                {renderConsommables()}
-                {renderMaintenance()}
                 <div className="flex justify-end">
                   <Button type="submit" disabled={loading}>
                     {loading ? "Enregistrement..." : "Enregistrer"}

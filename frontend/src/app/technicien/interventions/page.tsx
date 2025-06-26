@@ -58,17 +58,6 @@ function completeIntervention(intervention: any): Intervention {
   };
 }
 
-function TechnicianSingleStat() {
-  const { interventions } = useInterventions();
-  const terminees = interventions.filter(i => i.statut === 'terminee').length;
-  return (
-    <div className="bg-white rounded-lg shadow p-6 mb-8 text-center">
-      <p className="text-gray-600">Interventions terminées</p>
-      <p className="text-4xl font-bold text-green-600">{terminees}</p>
-    </div>
-  );
-}
-
 export default function TechnicianInterventionsPage() {
   const { user, isTechnician, loading: authLoading } = useAuth();
   const router = useRouter();
@@ -273,8 +262,6 @@ export default function TechnicianInterventionsPage() {
         <Navbar />
         {/* Contenu principal */}
         <main className="flex-1 p-6">
-          {/* Statistique simple en haut */}
-          <TechnicianSingleStat />
       <h1 className="text-2xl font-bold mb-6">Mes Interventions</h1>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Liste des interventions */}
@@ -298,7 +285,7 @@ export default function TechnicianInterventionsPage() {
                     className={`p-4 border rounded-lg mb-2 cursor-pointer hover:bg-gray-50 ${
                       selectedIntervention?.id === intervention.id ? 'bg-gray-100' : ''
                     }`}
-                        onClick={() => handleSelectIntervention(completeIntervention(intervention))}
+                            onClick={() => handleSelectIntervention(completeIntervention(intervention))}
                   >
                     <h3 className="font-semibold">{intervention.type_intervention}</h3>
                     <p>Date: {new Date(intervention.date_planifiee).toLocaleDateString()}</p>
@@ -314,7 +301,7 @@ export default function TechnicianInterventionsPage() {
                     className={`p-4 border rounded-lg mb-2 cursor-pointer hover:bg-gray-50 ${
                       selectedIntervention?.id === intervention.id ? 'bg-gray-100' : ''
                     }`}
-                        onClick={() => handleSelectIntervention(completeIntervention(intervention))}
+                            onClick={() => handleSelectIntervention(completeIntervention(intervention))}
                   >
                     <h3 className="font-semibold">{intervention.type_intervention}</h3>
                     <p>Date: {new Date(intervention.date_planifiee).toLocaleDateString()}</p>
@@ -330,7 +317,7 @@ export default function TechnicianInterventionsPage() {
                     className={`p-4 border rounded-lg mb-2 cursor-pointer hover:bg-gray-50 ${
                       selectedIntervention?.id === intervention.id ? 'bg-gray-100' : ''
                     }`}
-                        onClick={() => handleSelectIntervention(completeIntervention(intervention))}
+                            onClick={() => handleSelectIntervention(completeIntervention(intervention))}
                   >
                     <h3 className="font-semibold">{intervention.type_intervention}</h3>
                     <p>Date: {new Date(intervention.date_planifiee).toLocaleDateString()}</p>
@@ -346,7 +333,7 @@ export default function TechnicianInterventionsPage() {
                     className={`p-4 border rounded-lg mb-2 cursor-pointer hover:bg-gray-50 ${
                       selectedIntervention?.id === intervention.id ? 'bg-gray-100' : ''
                     }`}
-                        onClick={() => handleSelectIntervention(completeIntervention(intervention))}
+                            onClick={() => handleSelectIntervention(completeIntervention(intervention))}
                   >
                     <h3 className="font-semibold">{intervention.type_intervention}</h3>
                     <p>Date: {new Date(intervention.date_planifiee).toLocaleDateString()}</p>
@@ -365,7 +352,7 @@ export default function TechnicianInterventionsPage() {
             intervention={selectedIntervention}
             onUpdate={handleUpdateIntervention}
             onDelete={handleDeleteIntervention}
-                user={user}
+                    user={user}
           />
         ) : (
           <Card>
