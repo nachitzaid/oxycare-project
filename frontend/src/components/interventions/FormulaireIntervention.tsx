@@ -255,11 +255,11 @@ export function FormulaireIntervention({ interventionId, mode }: FormulaireInter
                 </PopoverTrigger>
                 <PopoverContent>
                   <Calendar
-                    value={formData.date_planifiee}
-                    onChange={(value, _event) => {
-                      const date = Array.isArray(value) ? value[0] : value;
-                      handleChange('date_planifiee', date);
-                    }}
+                  value={formData.date_planifiee}
+                  onChange={(value, _event) => {
+                    const date = Array.isArray(value) ? value[0] : value;
+                    handleChange('date_planifiee', date);
+                  }}
                   />
                 </PopoverContent>
               </Popover>
