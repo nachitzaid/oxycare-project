@@ -85,6 +85,8 @@ def creer_app(nom_config=None):
     
     return app
 
+app = creer_app()
+
 if __name__ == '__main__':
     app = creer_app()
     print("Serveur Flask démarré sur http://localhost:5000")
