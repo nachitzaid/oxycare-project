@@ -36,7 +36,10 @@ def creer_app(nom_config=None):
     
     CORS(app, resources={
         r"/*": {
-            "origins": ["http://localhost:3000"],
+            "origins": [
+                "http://localhost:3000",
+                "https://oxycare-project-64dc-ai26agy09-zaids-projects-769c53a1.vercel.app"
+            ],
              "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization", "Accept", "Origin", "X-Requested-With"],
              "expose_headers": ["Content-Type", "Authorization"],
