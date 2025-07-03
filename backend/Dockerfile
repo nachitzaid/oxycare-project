@@ -22,8 +22,8 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 # Copie tout le code
 COPY . .
 
-# Expose le port 8080 (Fly.io par défaut)
-EXPOSE 8080
+# Expose le port 5000 (Fly.io peut router n'importe quel port)
+EXPOSE 5000
 
-# Commande de démarrage (adapte selon ton entrypoint)
-CMD ["gunicorn", "-b", ":8080", "wsgi:app"]
+# Commande de démarrage (gunicorn sur le port 5000)
+CMD ["gunicorn", "-b", ":5000", "wsgi:app"]

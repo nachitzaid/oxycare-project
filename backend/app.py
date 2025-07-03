@@ -38,13 +38,15 @@ def creer_app(nom_config=None):
         r"/*": {
             "origins": [
                 "http://localhost:3000",
-                "https://oxycare-project-64dc-ai26agy09-zaids-projects-769c53a1.vercel.app"
+                "https://oxycare-project-8cwy.vercel.app",
+                "https://oxycare-project-8cwy-3dex07vx6-zaids-projects-769c53a1.vercel.app",
+                "https://oxycare-project-8cwy-lps37fklg-zaids-projects-769c53a1.vercel.app"
             ],
-             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization", "Accept", "Origin", "X-Requested-With"],
-             "expose_headers": ["Content-Type", "Authorization"],
-             "supports_credentials": True,
-             "max_age": 3600
+            "expose_headers": ["Content-Type", "Authorization"],
+            "supports_credentials": True,
+            "max_age": 3600
         }
     })
     
