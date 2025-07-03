@@ -310,6 +310,11 @@ export const useInterventions = () => {
     }
   }, [isAuthenticated, fetchInterventions]);
 
+  // IMPORTANT :
+  // Si vous utilisez les fonctions de ce hook dans un formulaire (ex: onSubmit),
+  // pensez à toujours appeler e.preventDefault() dans votre handler pour éviter
+  // le rechargement de la page lors des requêtes API ou du refresh token.
+
   return {
     interventions,
     loading,
@@ -325,4 +330,4 @@ export const useInterventions = () => {
     showMessage,
     makeRequest
   };
-};
+}
